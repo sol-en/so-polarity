@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ЖБК Облік - Фінансова Система</title>
+    <title>HOA Accounting - Financial System</title>
     <link rel="stylesheet" href="style.css?v=7">
     <link rel="stylesheet" href="print.css" media="print">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +21,7 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <div class="logo-icon">🏠</div>
-                    <span>ЖБК Облік</span>
+                    <span>HOA Accounting</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
@@ -36,7 +36,7 @@
             <div class="sidebar-footer">
                 <div class="user-info">
                     <div class="avatar">👤</div>
-                    <span>Адміністратор</span>
+                    <span>Administrator</span>
                 </div>
             </div>
         </aside>
@@ -44,28 +44,28 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <h1 id="page-title">Головна</h1>
+                <h1 id="page-title">Dashboard</h1>
                 <div class="header-actions">
-                    <button class="btn btn-secondary" id="theme-toggle" onclick="toggleTheme()" title="Перемкнути тему"><i class="fas fa-sun"></i></button>
+                    <button class="btn btn-secondary" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><i class="fas fa-sun"></i></button>
                     <button class="btn btn-primary" id="btn-recalculate">
-                        <i class="fas fa-sync"></i> Перерахувати
+                        <i class="fas fa-sync"></i> Recalculate
                     </button>
                     <div class="period-selector-container custom-dropdown-container" style="position: relative;">
                         <button id="custom-period-btn" class="btn btn-secondary" style="width: 260px; text-align: left; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--accent-color); padding: 0.5rem 1rem; border-radius: 6px; outline: none; display: flex; justify-content: space-between; align-items: center;">
-                            <span><i class="far fa-calendar-alt"></i> <span id="custom-period-text">Оберіть період...</span></span>
+                            <span><i class="far fa-calendar-alt"></i> <span id="custom-period-text">Select period...</span></span>
                             <i class="fas fa-caret-down"></i>
                         </button>
                         
                         <div id="custom-period-dropdown" class="period-dropdown" style="display: none; position: absolute; top: 110%; right: 0; background: var(--dropdown-bg, rgba(20, 28, 36, 0.95)); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); width: 260px; z-index: 1000; backdrop-filter: blur(16px);">
                             <div id="period-menu-main" class="period-menu-page">
-                                <div class="period-menu-item" data-action="last7"><i class="fas fa-check check-icon" style="opacity: 0"></i> Останні 7 днів</div>
-                                <div class="period-menu-item" data-action="today"><i class="fas fa-check check-icon" style="opacity: 0"></i> Сьогодні</div>
-                                <div class="period-menu-item" data-action="yesterday"><i class="fas fa-check check-icon" style="opacity: 0"></i> Вчора</div>
-                                <div class="period-menu-item" data-action="thisMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Поточний місяць</div>
-                                <div class="period-menu-item" data-action="prevMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Минулий місяць</div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-month"><span>Місяць</span> <i class="fas fa-chevron-right"></i></div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-quarter"><span>Квартал</span> <i class="fas fa-chevron-right"></i></div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-year"><span>Рік</span> <i class="fas fa-chevron-right"></i></div>
+                                <div class="period-menu-item" data-action="last7"><i class="fas fa-check check-icon" style="opacity: 0"></i> Last 7 days</div>
+                                <div class="period-menu-item" data-action="today"><i class="fas fa-check check-icon" style="opacity: 0"></i> Today</div>
+                                <div class="period-menu-item" data-action="yesterday"><i class="fas fa-check check-icon" style="opacity: 0"></i> Yesterday</div>
+                                <div class="period-menu-item" data-action="thisMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> This month</div>
+                                <div class="period-menu-item" data-action="prevMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Last month</div>
+                                <div class="period-menu-item has-submenu" data-target="period-menu-month"><span>Month</span> <i class="fas fa-chevron-right"></i></div>
+                                <div class="period-menu-item has-submenu" data-target="period-menu-quarter"><span>Quarter</span> <i class="fas fa-chevron-right"></i></div>
+                                <div class="period-menu-item has-submenu" data-target="period-menu-year"><span>Year</span> <i class="fas fa-chevron-right"></i></div>
                                 <div class="period-menu-item has-submenu" data-target="period-menu-custom"><span><i class="far fa-calendar-alt"></i> Період</span> <i class="fas fa-chevron-right"></i></div>
                             </div>
                             
@@ -88,8 +88,8 @@
                                 <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Період</div>
                                 <div id="litepicker-container" style="padding: 1rem;"></div>
                                 <div style="display: flex; justify-content: flex-start; gap: 10px; padding: 1rem; border-top: 1px solid var(--border-color);">
-                                    <button class="btn btn-primary" id="custom-period-apply">Застосувати</button>
-                                    <button class="btn btn-secondary" id="custom-period-cancel">Скасувати</button>
+                                    <button class="btn btn-primary" id="custom-period-apply">Apply</button>
+                                    <button class="btn btn-secondary" id="custom-period-cancel">Cancel</button>
                                 </div>
                             </div>
                         </div>
@@ -99,7 +99,7 @@
 
             <div id="content-area">
                 <!-- Content will be injected here by app.js -->
-                <div class="loader">Завантаження...</div>
+                <div class="loader">Loading...</div>
             </div>
         </main>
     </div>
@@ -108,15 +108,15 @@
     <div id="modal-container" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-title">Редагувати</h2>
+                <h2 id="modal-title">Edit</h2>
                 <button class="close-modal">&times;</button>
             </div>
             <div class="modal-body" id="modal-body">
                 <!-- Form content -->
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary close-modal">Скасувати</button>
-                <button class="btn btn-primary" id="modal-submit">Зберегти</button>
+                <button class="btn btn-secondary close-modal">Cancel</button>
+                <button class="btn btn-primary" id="modal-submit">Save</button>
             </div>
         </div>
     </div>
@@ -133,7 +133,7 @@
                 <!-- Months will be injected by JS -->
             </div>
             <div style="padding: 0.5rem; background: var(--bg-card);">
-                <button class="btn btn-secondary" style="width: 100%" onclick="closeMonthPicker()">Скасувати</button>
+                <button class="btn btn-secondary" style="width: 100%" onclick="closeMonthPicker()">Cancel</button>
             </div>
         </div>
     </div>

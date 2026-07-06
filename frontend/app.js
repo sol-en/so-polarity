@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let y = currentYearNum; y >= 2021; y--) {
                 const div = document.createElement('div');
                 div.className = 'period-menu-item';
-                div.innerText = `${y} рік`;
+                div.innerText = `${y} year`;
                 div.onclick = () => applyPeriod(`${y}-01-01`, `${y}-12-31`);
                 yearCont.appendChild(div);
             }
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let q = 4; q >= 1; q--) {
                     const div = document.createElement('div');
                     div.className = 'period-menu-item';
-                    div.innerText = `${q === 1 ? 'I' : q === 2 ? 'II' : q === 3 ? 'III' : 'IV'} квартал ${y}`;
+                    div.innerText = `${q === 1 ? 'I' : q === 2 ? 'II' : q === 3 ? 'III' : 'IV'} quarter ${y}`;
                     const mStart = (q - 1) * 3;
                     const mEnd = q * 3;
                     div.onclick = () => {
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthCont = document.getElementById('month-options-container');
         if(monthCont) {
             monthCont.innerHTML = '';
-            const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             for (let m = 0; m < 12; m++) {
                 const div = document.createElement('div');
                 div.className = 'period-menu-item';
@@ -271,8 +271,8 @@ function initNavigation() {
 async function loadPage(page) {
     if (Object.keys(state.pendingChanges).length > 0 && state.currentPage === 'apartments') {
         const proceed = await showConfirmModal(
-            'Незбережені зміни',
-            'У вас є незбережені зміни в налаштуваннях ліфта. Зберегти їх перед переходом?'
+            'Unsaved Changes',
+            'У вас є незбережені зміни в налаштуваннях ліфта. Save їх перед переходом?'
         );
         if (proceed === 'yes') {
             await saveApartmentChanges();
@@ -302,7 +302,7 @@ async function loadPage(page) {
     }
 
     state.currentPage = page;
-    contentArea.innerHTML = '<div class="loader">Завантаження...</div>';
+    contentArea.innerHTML = '<div class="loader">Loading...</div>';
 
     switch (page) {
         case 'dashboard': await renderDashboard(); break;
@@ -356,8 +356,8 @@ function closeModal() {
     const modalFooter = document.querySelector('.modal-footer');
     if (modalFooter) {
         modalFooter.innerHTML = `
-            <button class="btn btn-secondary close-modal" onclick="closeModal()">Скасувати</button>
-            <button class="btn btn-primary" id="modal-submit">Зберегти</button>`;
+            <button class="btn btn-secondary close-modal" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" id="modal-submit">Save</button>`;
     }
 }
 
@@ -404,7 +404,7 @@ function renderMonthPickerGrid() {
     const yearDisplay = document.getElementById('picker-year-display');
     if(yearDisplay) yearDisplay.innerText = state.pickerYear;
     
-    const months = ['Січ', 'Лют', 'Бер', 'Квіт', 'Трав', 'Черв', 'Лип', 'Серп', 'Вер', 'Жовт', 'Лист', 'Груд'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const targetVal = state[state.pickerTargetState] || '';
     
     const html = months.map((m, i) => {
@@ -420,7 +420,7 @@ function renderMonthPickerGrid() {
 window.formatPeriodStr = function(periodStr) {
     if (!periodStr || !periodStr.includes('-')) return periodStr || '—';
     const [y, m] = periodStr.split('-');
-    const months = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     return `${months[parseInt(m)-1]} ${y}`;
 };
 
@@ -433,7 +433,7 @@ function showConfirmModal(title, message) {
         modalFooter.innerHTML = `
             <button class="btn btn-secondary" id="confirm-no">Ні, відмінити зміни</button>
             <button class="btn btn-primary" id="confirm-yes">Так, зберегти</button>
-            <button class="btn btn-secondary" id="confirm-cancel">Скасувати (залишитись)</button>
+            <button class="btn btn-secondary" id="confirm-cancel">Cancel (залишитись)</button>
         `;
 
         document.getElementById('confirm-yes').onclick = () => { resolve('yes'); closeModal(); };
@@ -449,7 +449,7 @@ function showConfirmModal(title, message) {
 // Dashboard
 async function renderDashboard() {
     try {
-        pageTitle.innerText = 'Головна';
+        pageTitle.innerText = 'Dashboard';
 
         const res = await fetch(`${API_BASE}/dashboard/stats?start_date=${state.startDate}&end_date=${state.endDate}`);
         const data = await res.json();
@@ -471,7 +471,7 @@ async function renderDashboard() {
         const ebTotal = data.expense_breakdown.reduce((s, e) => s + e.amount, 0);
 
         // ── Detail table HTML ──
-        const detailHeaders = ['Тип', 'Група', 'Призначення'].concat(data.labels).concat(['Grand Total']);
+        const detailHeaders = ['Type', 'Group', 'Purpose'].concat(data.labels).concat(['Grand Total']);
         const detailHeadersHtml = detailHeaders.map(h => `<th>${h}</th>`).join('');
         const detailRowsHtml = data.detail_rows.map(r => {
             let cls = '';
@@ -497,7 +497,7 @@ async function renderDashboard() {
             `<tr><td>Кв. ${d.apartment || d.apt_number}</td><td>${d.owner}</td><td class="text-right color-danger">${formatCurrency(d.debt)} ₴</td></tr>`
         ).join('');
         if (otherDebt > 0) {
-            debtorsRowsHtml += `<tr class="total-row"><td>Решта</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
+            debtorsRowsHtml += `<tr class="total-row"><td>Other</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
         }
 
         // ── Setup Forecast Scenarios state ──
@@ -513,7 +513,7 @@ async function renderDashboard() {
         const startBal = actualMonths.length > 0 ? data.balance[actualMonths.length - 1] : data.totals.start_balance;
 
         // Store actual data for chart overlay
-        const monthNamesUa = ['Січ', 'Лют', 'Бер', 'Квіт', 'Трав', 'Черв', 'Лип', 'Серп', 'Вер', 'Жовт', 'Лист', 'Груд'];
+        const monthNamesUa = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         window.dashboardActuals = {
             labels: actualMonths.map(m => `${monthNamesUa[parseInt(m.split('-')[1])-1]}-${m.split('-')[0].substring(2)}`),
             months: actualMonths,
@@ -557,25 +557,25 @@ async function renderDashboard() {
                 <div class="dash-card" id="dash-stats" style="overflow: hidden; min-height: 100px;">
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <h3>Початковий баланс</h3>
+                            <h3>Initial Balance</h3>
                             <div class="value ${data.totals.start_balance < 0 ? 'color-danger' : 'color-success'}">
                                 ${formatCurrency(data.totals.start_balance)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Надходження</h3>
+                            <h3>Inflows</h3>
                             <div class="value color-success">
                                 + ${formatCurrency(data.totals.inflow)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Витрати</h3>
+                            <h3>Expenses</h3>
                             <div class="value color-danger">
                                 - ${formatCurrency(data.totals.expenses)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Кінцевий баланс</h3>
+                            <h3>Final Balance</h3>
                             <div class="value ${data.totals.balance < 0 ? 'color-danger' : 'color-success'}">
                                 ${formatCurrency(data.totals.balance)} ₴
                             </div>
@@ -586,7 +586,7 @@ async function renderDashboard() {
                 <!-- Full-Width Chart: Actuals + Scenarios -->
                 <div class="chart-container dash-card" id="dash-chart" style="overflow: hidden; min-height: 350px; display: flex; flex-direction: column; width: 100%;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3 class="dash-section-title"><i class="fas fa-chart-area" style="color: var(--accent-color);"></i> Баланс: факт та прогноз</h3>
+                        <h3 class="dash-section-title"><i class="fas fa-chart-area" style="color: var(--accent-color);"></i> Balance: Actual vs Forecast</h3>
                     </div>
                     <div class="collapsible-content" style="flex-grow: 1; display: flex; flex-direction: column;">
                         <div style="flex-grow: 1; min-height: 280px; position: relative;">
@@ -598,9 +598,9 @@ async function renderDashboard() {
                 <!-- Balance Table -->
                 <div class="dash-table-card dash-card" id="dash-balance" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column;">
                     <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                        <span class="dash-section-title">Баланс</span>
+                        <span class="dash-section-title">Balance</span>
                         <div>
-                            <button id="toggle-details-btn" class="section-toggle-btn" style="margin-right:0.75rem;" onclick="toggleDetailsTable(event)"><i class="fas fa-plus"></i> Деталі</button>
+                            <button id="toggle-details-btn" class="section-toggle-btn" style="margin-right:0.75rem;" onclick="toggleDetailsTable(event)"><i class="fas fa-plus"></i> Details</button>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </div>
                     </h3>
@@ -612,7 +612,7 @@ async function renderDashboard() {
                             </table>
                         </div>
                         <div id="details-table-container" style="display:none; overflow-x:auto; margin-top:2rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
-                            <h4 style="margin-bottom:1rem; color:var(--text-primary); font-size: 0.95rem;">Деталізація</h4>
+                            <h4 style="margin-bottom:1rem; color:var(--text-primary); font-size: 0.95rem;">Details Breakdown</h4>
                             <table>
                                 <thead><tr>${detailHeadersHtml}</tr></thead>
                                 <tbody>${detailRowsHtml}</tbody>
@@ -624,15 +624,15 @@ async function renderDashboard() {
                 <!-- Full-Width Initiatives Grid -->
                 <div class="dash-card dash-table-card" id="dash-initiatives" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column; width: 100%; padding: 1.5rem;">
                     <h3 style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;" data-collapsible="true">
-                        <span class="dash-section-title">Доступність ініціатив</span>
+                        <span class="dash-section-title">Initiatives Availability</span>
                         <div>
-                            <button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Додати ініціативу</button>
+                            <button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Add Initiative</button>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </div>
                     </h3>
                     <div class="collapsible-content" style="flex-grow: 1; overflow-y: auto;">
                         <div id="scenariosInitiativesGrid" style="width: 100%; overflow-x: auto;">
-                            <div class="loader" style="margin: 2rem auto;">Завантаження...</div>
+                            <div class="loader" style="margin: 2rem auto;">Loading...</div>
                         </div>
                     </div>
                 </div>
@@ -642,7 +642,7 @@ async function renderDashboard() {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
                         <h3 class="dash-section-title">
                             <i class="fas fa-sliders-h" style="color: var(--accent-color);"></i>
-                            Параметри та деталізація сценарію
+                            Scenario Parameters and Details
                         </h3>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div style="display: inline-flex; background: rgba(0,0,0,0.1); border: 1px solid var(--border-color); border-radius: 8px; padding: 3px;">
@@ -656,24 +656,24 @@ async function renderDashboard() {
                     <!-- Parameters Inputs — collapsible -->
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
                         <button class="section-toggle-btn" onclick="window.toggleSectionCollapse('scenario-params-section', this)">
-                            <i class="fas fa-chevron-up"></i> Параметри
+                            <i class="fas fa-chevron-up"></i> Parameters
                         </button>
                     </div>
                     <div id="scenario-params-section" class="section-collapsible" style="background: rgba(255,255,255,0.02); padding: 1rem 1.25rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border-color);">
                         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem;">
                             <div>
-                                <span class="dash-section-subtitle">Поточний баланс</span>
+                                <span class="dash-section-subtitle">Current Balance</span>
                                 <div id="scenario-balance-display" style="font-weight: 600; font-size: 1rem; padding: 4px 0; color: var(--text-primary);">0.00 ₴</div>
                             </div>
                             <div>
-                                <span class="dash-section-subtitle">Тариф (₴/м²)</span>
+                                <span class="dash-section-subtitle">Tariff (₴/m²)</span>
                                 <div class="editable-pill" style="margin-top: 4px;">
                                     <input type="number" id="scenario-tariff" step="0.1" style="width: 50px;">
                                     <span class="pill-suffix">₴/м²</span>
                                 </div>
                             </div>
                             <div>
-                                <span class="dash-section-subtitle">Очікуваний збір</span>
+                                <span class="dash-section-subtitle">Expected Collection</span>
                                 <div class="editable-pill" style="margin-top: 4px;">
                                     <input type="number" id="scenario-collection" max="150" style="width: 42px;">
                                     <span class="pill-suffix">%</span>
@@ -681,7 +681,7 @@ async function renderDashboard() {
                             </div>
                             <div style="display:flex; align-items:flex-end;">
                                 <button class="btn btn-primary btn-sm" onclick="window.updateCurrentScenarioParams()" style="font-weight: 600; display: flex; align-items: center; gap: 6px; border-radius: 8px; padding: 6px 16px; font-size: 0.8rem;">
-                                    <i class="fas fa-sync-alt"></i> Оновити
+                                    <i class="fas fa-sync-alt"></i> Update
                                 </button>
                             </div>
                         </div>
@@ -690,11 +690,11 @@ async function renderDashboard() {
                     <!-- Detail Table & Summary Stats — collapsible -->
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem;">
                         <button class="section-toggle-btn" onclick="window.toggleSectionCollapse('scenario-detail-results', this)">
-                            <i class="fas fa-chevron-up"></i> Деталізація
+                            <i class="fas fa-chevron-up"></i> Details Breakdown
                         </button>
                     </div>
                     <div id="scenario-detail-results" class="section-collapsible">
-                        <div class="loader" style="margin: 2rem auto;">Завантаження...</div>
+                        <div class="loader" style="margin: 2rem auto;">Loading...</div>
                     </div>
                 </div>
 
@@ -702,7 +702,7 @@ async function renderDashboard() {
                 <div id="dash-tables-row" class="dashboard-tables-grid" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; align-items: stretch;">
                     <div class="dash-table-card dash-card" id="dash-debtors" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
                         <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Боржники (ТОП-10)</span>
+                            <span class="dash-section-title">Debtors (Top 10)</span>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </h3>
                         <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
@@ -711,7 +711,7 @@ async function renderDashboard() {
                             </div>
                             <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
                                 <table style="width:100%">
-                                    <thead><tr><th>Квартира</th><th>Власник</th><th class="text-right">Борг</th></tr></thead>
+                                    <thead><tr><th>Apartment</th><th>Owner</th><th class="text-right">Debt</th></tr></thead>
                                     <tbody>
                                         ${debtorsRowsHtml}
                                     </tbody>
@@ -722,7 +722,7 @@ async function renderDashboard() {
                     
                     <div class="dash-table-card dash-card" id="dash-expenses" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
                         <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Витрати: розбивка</span>
+                            <span class="dash-section-title">Expenses: Breakdown</span>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </h3>
                         <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
@@ -731,10 +731,10 @@ async function renderDashboard() {
                             </div>
                             <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
                                 <table style="width:100%">
-                                    <thead><tr><th>Група</th><th class="text-right">%</th><th class="text-right">Сума</th></tr></thead>
+                                    <thead><tr><th>Group</th><th class="text-right">%</th><th class="text-right">Amount</th></tr></thead>
                                     <tbody>
                                         ${ebRows}
-                                        <tr class="total-row"><td>Всього</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
+                                        <tr class="total-row"><td>Total</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -757,7 +757,7 @@ async function renderDashboard() {
         
 
     } catch (err) {
-        contentArea.innerHTML = `<p class="color-danger">Помилка дашборду: ${err.message}</p>`;
+        contentArea.innerHTML = `<p class="color-danger">Dashboard error: ${err.message}</p>`;
     }
 }
 
@@ -787,7 +787,7 @@ function renderDashboardCharts(data) {
     const pieLabels = topDebtors.map(d => `Кв. ${d.apartment || d.apt_number} - ${d.owner} (${formatCurrency(d.debt)} ₴)`);
     const pieData = topDebtors.map(d => d.debt);
     if (otherDebt > 0) {
-        pieLabels.push('Решта');
+        pieLabels.push('Other');
         pieData.push(otherDebt);
     }
     
@@ -896,7 +896,7 @@ async function renderApartments() {
         const hasChanges = Object.keys(state.pendingChanges).length > 0;
 
         const rows = state.apartments
-            .filter(a => !a.number.includes('Всього'))
+            .filter(a => !a.number.includes('Total'))
             .map(a => {
                 const pending = state.pendingChanges[a.id];
                 const hasLiftExemption = pending !== undefined ? pending.has_lift_exemption : a.has_lift_exemption;
@@ -913,26 +913,26 @@ async function renderApartments() {
                         ${formatCurrency(a.current_balance)} ₴
                     </td>
                     <td onclick="event.stopPropagation()">
-                        <button class="btn btn-secondary btn-sm" onclick="editApartment(${a.id})" title="Редагувати">✏️</button>
+                        <button class="btn btn-secondary btn-sm" onclick="editApartment(${a.id})" title="Edit">✏️</button>
                     </td>
                 </tr>
                 <tr id="logs-row-${a.id}" style="display:none" class="log-detail-row">
                     <td colspan="6" id="logs-content-${a.id}" style="padding: 1rem; background: rgba(255,255,255,0.02)">
-                        Завантаження...
+                        Loading...
                     </td>
                 </tr>`;
             }).join('');
 
         contentArea.innerHTML = `
             <div style="margin-bottom: 1.5rem; display:flex; justify-content: flex-end">
-                <button id="btn-save-apartments" class="btn btn-primary" onclick="saveApartmentChanges()">💾 Зберегти зміни</button>
+                <button id="btn-save-apartments" class="btn btn-primary" onclick="saveApartmentChanges()">💾 Save зміни</button>
             </div>
             <div class="table-container">
                 <table>
                     <thead>
                         <tr>
-                            <th>№</th><th>Власник</th><th>Площа</th>
-                            <th>Ліфт</th><th>Баланс</th><th>Дії</th>
+                            <th>№</th><th>Owner</th><th>Площа</th>
+                            <th>Ліфт</th><th>Balance</th><th>Дії</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -989,7 +989,7 @@ async function saveApartmentChanges() {
         await renderSettings();
     } catch (err) {
         alert('Помилка при збереженні: ' + err.message);
-        if (btn) { btn.disabled = false; btn.innerText = '💾 Зберегти зміни'; }
+        if (btn) { btn.disabled = false; btn.innerText = '💾 Save зміни'; }
     }
 }
 
@@ -1001,7 +1001,7 @@ function updateGlobalUI() {
             recalcBtn.innerHTML = '<i class="fas fa-sync"></i> Потрібен перерахунок';
         } else {
             recalcBtn.classList.remove('pulse-animation');
-            recalcBtn.innerHTML = '<i class="fas fa-sync"></i> Перерахувати';
+            recalcBtn.innerHTML = '<i class="fas fa-sync"></i> Recalculate';
         }
     }
 }
@@ -1054,7 +1054,7 @@ async function fetchAndShowInlineLogs(id) {
             <div class="table-container" style="background: transparent; box-shadow: none; border: 1px solid var(--border-color)">
                 <table style="width: 100%; font-size: 0.85rem">
                     <thead>
-                        <tr><th>Дата запису</th><th>Застосовано з</th><th>Тип</th><th>Значення</th></tr>
+                        <tr><th>Дата запису</th><th>Застосовано з</th><th>Type</th><th>Значення</th></tr>
                     </thead>
                     <tbody>
                         ${logs.length ? rows : '<tr><td colspan="4" style="text-align:center">Логів поки немає</td></tr>'}
@@ -1087,7 +1087,7 @@ async function renderTransactions() {
 
         // Compute extra fields for filtering and display
         txs = txs.map(tx => {
-            const typeStr = tx.category ? (tx.category.type === 'income' ? 'Надходження' : 'Витрата') : '—';
+            const typeStr = tx.category ? (tx.category.type === 'income' ? 'Inflows' : 'Витрата') : '—';
             const groupStr = tx.category ? (tx.category.name || '—') : '—';
             const purposeStr = tx.description || '—';
 
@@ -1189,7 +1189,7 @@ async function renderTransactions() {
                 tag = '<span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:var(--success); color:#fff; font-weight:600">READY</span>';
             }
             const isMatched = p.match_status === 'matched' || p.match_status === 'mapped';
-            const typeLabel = isExpense ? 'Витрата' : 'Надходження';
+            const typeLabel = isExpense ? 'Витрата' : 'Inflows';
             
             let linkInfo = '—';
             let actionBtn = '';
@@ -1253,7 +1253,7 @@ async function renderTransactions() {
                     
                     ${unpostedBank.length > 0 ? `
                     <button class="btn btn-secondary" onclick="rematchBankPayments()">
-                        <i class="fas fa-magic"></i> Перерахувати зв'язки
+                        <i class="fas fa-magic"></i> Recalculate зв'язки
                     </button>
                     <button class="btn btn-primary" onclick="postMatchedBankPayments()">
                         <i class="fas fa-check-double"></i> Провести всі зв'язані
@@ -1270,11 +1270,11 @@ async function renderTransactions() {
                     <thead>
                         <tr>
                             ${sortTh('date', 'Дата')}
-                            ${sortTh('type', 'Тип')}
-                            ${sortTh('group', 'Група')}
-                            ${sortTh('purpose', 'Призначення')}
+                            ${sortTh('type', 'Type')}
+                            ${sortTh('group', 'Group')}
+                            ${sortTh('purpose', 'Purpose')}
                             ${sortTh('counterparty', 'Контрагент')}
-                            ${sortTh('amount', 'Сума')}
+                            ${sortTh('amount', 'Amount')}
                             ${sortTh('comment', 'Коментар')}
                             <th>Дії</th>
                         </tr>
@@ -1340,20 +1340,20 @@ function getCpTypeForCategory(cat) {
     if (!cat) return { cpType: 'none', label: '' };
     const name = (cat.name || '').toLowerCase();
     if (cat.type === 'income' && (name.includes('квартплата') || name.includes('мешканц'))) {
-        return { cpType: 'apartment', label: 'Квартира (мешканець)' };
+        return { cpType: 'apartment', label: 'Apartment (мешканець)' };
     }
     if (cat.type === 'income' && name.includes('договор')) {
         return { cpType: 'contractor_income', label: 'Контрагент (Договора)' };
     }
     if (cat.type === 'expense') {
-        return { cpType: 'contractor_expense', label: 'Контрагент (Витрати)' };
+        return { cpType: 'contractor_expense', label: 'Контрагент (Expenses)' };
     }
     return { cpType: 'manual', label: 'Контрагент' };
 }
 
 function renderCpField(cpType, selectedValue) {
     if (cpType === 'apartment') {
-        const opts = state.apartments.filter(a => !a.number.includes('Всього')).map(a =>
+        const opts = state.apartments.filter(a => !a.number.includes('Total')).map(a =>
             `<option value="${a.id}" ${a.id == selectedValue ? 'selected' : ''}>Кв. ${a.number} (${a.owner_name || 'Невідомо'})</option>`
         ).join('');
         return `<select id="tx-cp-value" class="form-control"><option value="">-- Оберіть квартиру --</option>${opts}</select>`;
@@ -1398,14 +1398,14 @@ window.showAddTransactionModal = function (templateTx = null) {
 
     // Sort categories alphabetically: by type label then by name
     const sortedCats = [...state.categories].sort((a, b) => {
-        const typeA = a.type === 'income' ? 'Надходження' : 'Витрата';
-        const typeB = b.type === 'income' ? 'Надходження' : 'Витрата';
+        const typeA = a.type === 'income' ? 'Inflows' : 'Витрата';
+        const typeB = b.type === 'income' ? 'Inflows' : 'Витрата';
         if (typeA !== typeB) return typeA.localeCompare(typeB, 'uk');
         return (a.name || '').localeCompare(b.name || '', 'uk');
     });
 
     const catOptions = sortedCats.map(c =>
-        `<option value="${c.id}" ${c.id == dCatId ? 'selected' : ''}>[${c.type === 'income' ? 'Надходження' : 'Витрата'}] ${c.name}</option>`
+        `<option value="${c.id}" ${c.id == dCatId ? 'selected' : ''}>[${c.type === 'income' ? 'Inflows' : 'Витрата'}] ${c.name}</option>`
     ).join('');
 
     const selectedCat = state.categories.find(c => c.id == dCatId);
@@ -1418,11 +1418,11 @@ window.showAddTransactionModal = function (templateTx = null) {
                 <input type="date" id="tx-date" class="form-control" required value="${dDate}">
             </div>
             <div class="form-group" style="margin-bottom:1rem">
-                <label>Категорія (Тип / Група)</label>
+                <label>Категорія (Type / Group)</label>
                 <select id="tx-category" class="form-control" required onchange="onTxCategoryChange()">
                     <option value="">-- Оберіть категорію --</option>
                     ${catOptions}
-                    <option value="__edit__" style="font-style: italic">✏️ Редагувати список...</option>
+                    <option value="__edit__" style="font-style: italic">✏️ Edit список...</option>
                 </select>
             </div>
             <div class="form-group" id="wrap-cp" style="margin-bottom:1rem; ${selectedCat ? '' : 'display:none'}">
@@ -1430,11 +1430,11 @@ window.showAddTransactionModal = function (templateTx = null) {
                 <div id="cp-field-container">${selectedCat ? renderCpField(cpType, dCpValue) : ''}</div>
             </div>
             <div class="form-group" style="margin-bottom:1rem">
-                <label>Сума (₴)</label>
+                <label>Amount (₴)</label>
                 <input type="number" id="tx-amount" class="form-control" step="0.01" required value="${dAmount}">
             </div>
             <div class="form-group" style="margin-bottom:1rem">
-                <label>Призначення (опціонально)</label>
+                <label>Purpose (опціонально)</label>
                 <input type="text" id="tx-desc" class="form-control" value="${dDesc}">
             </div>
             <div class="form-group" style="margin-bottom:1rem">
@@ -1446,7 +1446,7 @@ window.showAddTransactionModal = function (templateTx = null) {
     `;
 
     const submitBtn = document.getElementById('modal-submit');
-    submitBtn.innerText = 'Зберегти транзакцію';
+    submitBtn.innerText = 'Save транзакцію';
     submitBtn.onclick = () => document.getElementById('tx-hidden-submit').click();
     modal.style.display = 'flex';
 };
@@ -1524,7 +1524,7 @@ window.submitTransaction = async function (e) {
     } catch (err) {
         alert('Помилка при збереженні: ' + err.message);
         document.getElementById('modal-submit').disabled = false;
-        document.getElementById('modal-submit').innerText = 'Зберегти транзакцію';
+        document.getElementById('modal-submit').innerText = 'Save транзакцію';
     };
 }
 
@@ -1550,7 +1550,7 @@ window.uploadTransactions = async function(event) {
 
     try {
         const btn = document.querySelector('button[title="Імпорт транзакцій з ПриватБанку (Excel)"]');
-        if (btn) btn.innerText = 'Завантаження...';
+        if (btn) btn.innerText = 'Loading...';
 
         const res = await fetch(`${API_BASE}/transactions/upload`, {
             method: 'POST',
@@ -1680,7 +1680,7 @@ window.openBankMapModal = async function(paymentId) {
         
         modalTitle.innerText = `Зв'язати платіж`;
         
-        const aptOpts = state.apartments.filter(a => !a.number.includes('Всього')).map(a => 
+        const aptOpts = state.apartments.filter(a => !a.number.includes('Total')).map(a => 
             `<option value="${a.id}" ${p.suggested_apartment_id === a.id || p.apartment_id === a.id ? 'selected' : ''}>Кв. ${a.number} (${a.owner_name || 'Невідомо'})</option>`
         ).join('');
         
@@ -1701,8 +1701,8 @@ window.openBankMapModal = async function(paymentId) {
             ${unconfirmedHtml}
             <div style="margin-bottom:1rem; font-size:0.9rem">
                 <p><b>Платник:</b> ${p.payer_name || p.correspondent_name || '—'}</p>
-                <p><b>Призначення/Адреса:</b> ${p.payer_address || p.purpose || '—'}</p>
-                <p><b>Сума:</b> ${formatCurrency(p.amount)} ₴</p>
+                <p><b>Purpose/Адреса:</b> ${p.payer_address || p.purpose || '—'}</p>
+                <p><b>Amount:</b> ${formatCurrency(p.amount)} ₴</p>
             </div>
             
             <form id="bank-map-form" onsubmit="submitBankMap(event, ${p.id})">
@@ -1721,7 +1721,7 @@ window.openBankMapModal = async function(paymentId) {
                     </label>
                     
                     <div id="bank-map-key-type-wrap" style="display:none; margin-top:1rem">
-                        <label>Тип ключа</label>
+                        <label>Type ключа</label>
                         <select id="bank-map-key-type" class="form-control">
                             <option value="payer_name">Точний збіг платника (${p.payer_name || p.correspondent_name})</option>
                             <option value="address_substring">Містить в призначенні (${p.payer_address || p.purpose})</option>
@@ -1734,7 +1734,7 @@ window.openBankMapModal = async function(paymentId) {
         `;
         
         const submitBtn = document.getElementById('modal-submit');
-        submitBtn.innerText = 'Зберегти зв\'язок';
+        submitBtn.innerText = 'Save зв\'язок';
         submitBtn.onclick = () => document.getElementById('bank-map-hidden-submit').click();
         modal.style.display = 'flex';
         
@@ -1790,7 +1790,7 @@ window.submitBankMap = async function(e, id) {
     } catch (err) {
         alert('Помилка: ' + err.message);
         document.getElementById('modal-submit').disabled = false;
-        document.getElementById('modal-submit').innerText = 'Зберегти зв\'язок';
+        document.getElementById('modal-submit').innerText = 'Save зв\'язок';
     }
 };
 
@@ -1913,7 +1913,7 @@ async function fetchAndRenderReport() {
                     <th class="text-right">Нараховано<br><small>(За період)</small></th>
                     <th class="text-right">Сплачено<br><small>(За період)</small></th>
                     <th class="text-right">Кінц. борг<br><small>(${formatPeriod(months[months.length-1])})</small></th>
-                    <th>Деталізація</th>
+                    <th>Details Breakdown</th>
                 </tr>`;
         }
 
@@ -1967,7 +1967,7 @@ async function fetchAndRenderReport() {
                             <table style="width:100%; font-size:0.85rem; margin:0">
                                 <thead>
                                     <tr style="background:transparent; border-bottom:1px solid rgba(255,255,255,0.1)">
-                                        <th>Місяць</th>
+                                        <th>Month</th>
                                         <th class="text-right">Поч. борг</th>
                                         <th class="text-right">Утрим.</th>
                                         <th class="text-right">Ліфт</th>
@@ -2077,7 +2077,7 @@ async function exportMainReport() {
         } else {
             let row1 = ['Кв.', 'ПІБ', 'Поч. борг'];
             months.forEach(m => {
-                if (state.expandedMonth === m) row1.push(`${m} (Утрим.)`, `${m} (Ліфт)`, `${m} (Газ)`, `${m} (Кор.)`, `${m} (Сплачено)`, `${m} (Борг)`);
+                if (state.expandedMonth === m) row1.push(`${m} (Утрим.)`, `${m} (Ліфт)`, `${m} (Газ)`, `${m} (Кор.)`, `${m} (Сплачено)`, `${m} (Debt)`);
                 else row1.push(m);
             });
             row1.push('Кін. борг');
@@ -2142,7 +2142,7 @@ async function exportApartmentHistory(aptId, aptNum) {
         const row = data.find(r => r.apartment_id === aptId);
         if (!row) return alert('Квартиру не знайдено');
 
-        let csv = [['Місяць', 'Борг на поч.', 'Утримання', 'Ліфт', 'Газ', 'Корегув.', 'Сплачено', 'Борг на кін.'].join(';')];
+        let csv = [['Місяць', 'Debt на поч.', 'Утримання', 'Ліфт', 'Газ', 'Корегув.', 'Сплачено', 'Debt на кін.'].join(';')];
         let rb = row.start_balance;
 
         row.monthly_details.forEach(m => {
@@ -2406,9 +2406,9 @@ async function printReceipts() {
                     <hr class="r-line">
                     <div class="r-row"><span>Нараховано <b>${periodStr}</b></span> <span><b>${ch.total.toFixed(2)} грн.</b></span></div>
                     <div class="r-row"><span>Корегування</span> <span>${ch.adjustment.toFixed(2)} грн.</span></div>
-                    <div class="r-row"><span><b>Борг</b> ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row"><span><b>Debt</b> ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
                     <div class="r-row"><span><b>Сплачено</b> ${periodStr}</span> <span><b>${rep.monthly_details[0].payment.toFixed(2)} грн.</b></span></div>
-                    <div class="r-row r-total"><span><b>Борг</b> ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-total"><span><b>Debt</b> ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
                     <div class="r-footer">
                         <div>бухгалтер Олена Олександрівна тел. 098 206 0931</div>
@@ -2442,7 +2442,7 @@ async function renderDebtors() {
     if (!previewArea) return;
 
     try {
-        previewArea.innerHTML = '<div class="loader">Завантаження...</div>';
+        previewArea.innerHTML = '<div class="loader">Loading...</div>';
         if (state.apartments.length === 0) await fetchApartments();
 
         const debtors = state.apartments.filter(a => (a.current_balance || 0) < 0).sort((a, b) => a.current_balance - b.current_balance);
@@ -2461,8 +2461,8 @@ async function renderDebtors() {
                     <thead>
                         <tr style="background: rgba(255,255,255,0.05);">
                             <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">№ Квартири</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Власник</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Борг</th>
+                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Owner</th>
+                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Debt</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -2496,7 +2496,7 @@ async function renderSettings() {
     const hasChanges = Object.keys(state.pendingChanges || {}).length > 0;
     
     const aptRows = state.apartments
-        .filter(a => !a.number.includes('Всього'))
+        .filter(a => !a.number.includes('Total'))
         .map(a => {
             return `
             <tr onclick="toggleInlineLogs(${a.id})" id="row-${a.id}" style="cursor:pointer">
@@ -2504,12 +2504,12 @@ async function renderSettings() {
                 <td style="padding: 0.3rem 0.5rem;">${a.owner_name || '—'}</td>
                 <td style="padding: 0.3rem 0.5rem;">${a.area_m2} м²</td>
                 <td style="padding: 0.3rem 0.5rem;" onclick="event.stopPropagation()">
-                    <button class="btn btn-secondary btn-sm" onclick="editApartment(${a.id})" title="Редагувати">✏️</button>
+                    <button class="btn btn-secondary btn-sm" onclick="editApartment(${a.id})" title="Edit">✏️</button>
                 </td>
             </tr>
             <tr id="logs-row-${a.id}" style="display:none" class="log-detail-row">
                 <td colspan="4" id="logs-content-${a.id}" style="padding: 1rem; background: rgba(255,255,255,0.02)">
-                    Завантаження...
+                    Loading...
                 </td>
             </tr>`;
         }).join('');
@@ -2533,7 +2533,7 @@ async function renderSettings() {
                         <thead>
                             <tr>
                                 <th style="padding: 0.3rem 0.5rem; width: 15%;">№</th>
-                                <th style="padding: 0.3rem 0.5rem; width: 50%;">Власник</th>
+                                <th style="padding: 0.3rem 0.5rem; width: 50%;">Owner</th>
                                 <th style="padding: 0.3rem 0.5rem; width: 20%;">Площа</th>
                                 <th style="padding: 0.3rem 0.5rem; width: 15%;">Дії</th>
                             </tr>
@@ -2845,7 +2845,7 @@ async function loadCategoriesSettings() {
         // Build two-level tree: Type → Group → [categories]
         const tree = {};
         cats.forEach(c => {
-            const tLabel = c.type === 'income' ? 'Надходження' : 'Витрати';
+            const tLabel = c.type === 'income' ? 'Inflows' : 'Expenses';
             const grp = c.group || c.name;
             if (!tree[tLabel]) tree[tLabel] = {};
             if (!tree[tLabel][grp]) tree[tLabel][grp] = [];
@@ -2854,10 +2854,10 @@ async function loadCategoriesSettings() {
 
         let html = '';
         for (const [tLabel, groups] of Object.entries(tree)) {
-            const typeColor = tLabel === 'Надходження' ? 'var(--success)' : 'var(--danger)';
+            const typeColor = tLabel === 'Inflows' ? 'var(--success)' : 'var(--danger)';
             html += `<div style="margin-bottom:0.5rem">
                 <div style="font-weight:700; font-size:0.8rem; color:${typeColor}; padding:0.3rem 0.5rem; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid rgba(255,255,255,0.08)">
-                    ${tLabel === 'Надходження' ? '↓' : '↑'} ${tLabel}
+                    ${tLabel === 'Inflows' ? '↓' : '↑'} ${tLabel}
                 </div>`;
             for (const [grp, items] of Object.entries(groups)) {
                 html += `<div style="padding-left:0.5rem; border-left:2px solid rgba(255,255,255,0.1); margin:0.25rem 0 0.25rem 0.5rem">
@@ -2866,7 +2866,7 @@ async function loadCategoriesSettings() {
                     html += `<div style="display:flex;justify-content:space-between;padding:0.3rem 0.5rem;align-items:center;font-size:0.9rem">
                         <span>${c.name}</span>
                         <div style="display:flex;gap:0.3rem">
-                            <button class="btn btn-secondary btn-sm" onclick="editCategory(${c.id})" title="Редагувати">✏️</button>
+                            <button class="btn btn-secondary btn-sm" onclick="editCategory(${c.id})" title="Edit">✏️</button>
                             <button class="btn btn-secondary btn-sm" onclick="deleteCategory(${c.id})" title="Видалити">🗑️</button>
                         </div>
                     </div>`;
@@ -2888,15 +2888,15 @@ window.showAddCategoryModal = function() {
 
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Тип операції</label>
+            <label>Type операції</label>
             <select id="cat-type" class="form-control" style="width:100%;margin-bottom:1rem">
-                <option value="income">Надходження</option>
+                <option value="income">Inflows</option>
                 <option value="expense">Витрата</option>
             </select>
-            <label>Група призначення</label>
+            <label>Group призначення</label>
             <input type="text" id="cat-group" class="form-control" list="cat-group-list" style="width:100%;margin-bottom:1rem" placeholder="Наприклад: Ліфт, Прибирання, Квартплата">
             <datalist id="cat-group-list">${groupOptions}</datalist>
-            <label>Назва (Призначення)</label>
+            <label>Назва (Purpose)</label>
             <input type="text" id="cat-name" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="Наприклад: Квартплата (банк)">
         </div>`;
     modal.style.display = 'flex';
@@ -2926,22 +2926,22 @@ window.editCategory = function(id) {
     const cat = state.categories.find(c => c.id === id);
     if (!cat) return;
 
-    modalTitle.innerText = 'Редагувати категорію';
+    modalTitle.innerText = 'Edit категорію';
 
     const existingGroups = [...new Set(state.categories.map(c => c.group).filter(Boolean))];
     const groupOptions = existingGroups.map(g => `<option value="${g}">`).join('');
 
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Тип операції</label>
+            <label>Type операції</label>
             <select id="cat-type" class="form-control" style="width:100%;margin-bottom:1rem">
-                <option value="income" ${cat.type === 'income' ? 'selected' : ''}>Надходження</option>
+                <option value="income" ${cat.type === 'income' ? 'selected' : ''}>Inflows</option>
                 <option value="expense" ${cat.type === 'expense' ? 'selected' : ''}>Витрата</option>
             </select>
-            <label>Група призначення</label>
+            <label>Group призначення</label>
             <input type="text" id="cat-group" class="form-control" list="cat-group-list" style="width:100%;margin-bottom:1rem" value="${cat.group || ''}">
             <datalist id="cat-group-list">${groupOptions}</datalist>
-            <label>Назва (Призначення)</label>
+            <label>Назва (Purpose)</label>
             <input type="text" id="cat-name" class="form-control" style="width:100%;margin-bottom:1rem" value="${cat.name || ''}">
         </div>`;
     modal.style.display = 'flex';
@@ -3006,8 +3006,8 @@ async function loadContractorsSettings() {
 
         let html = '';
         const sections = [
-            { key: 'income', label: 'Надходження', color: 'var(--success)', icon: '↓' },
-            { key: 'expense', label: 'Витрати', color: 'var(--danger)', icon: '↑' },
+            { key: 'income', label: 'Inflows', color: 'var(--success)', icon: '↓' },
+            { key: 'expense', label: 'Expenses', color: 'var(--danger)', icon: '↑' },
             { key: 'other', label: 'Без категорії', color: 'var(--text-secondary)', icon: '•' }
         ];
         for (const sec of sections) {
@@ -3026,7 +3026,7 @@ async function loadContractorsSettings() {
                         <br>${c.name}
                     </div>
                     <div style="display:flex;gap:0.3rem">
-                        <button class="btn btn-secondary btn-sm" onclick="editContractor(${c.id})" title="Редагувати">✏️</button>
+                        <button class="btn btn-secondary btn-sm" onclick="editContractor(${c.id})" title="Edit">✏️</button>
                         <button class="btn btn-secondary btn-sm" onclick="deleteContractor(${c.id})" title="Видалити">🗑️</button>
                     </div>
                 </div>`;
@@ -3042,7 +3042,7 @@ window.showAddContractorModal = function() {
     const catOptions = state.categories.map(c => `<option value="${c.id}">${c.name} (${c.group || c.type})</option>`).join('');
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Назва (Призначення)</label>
+            <label>Назва (Purpose)</label>
             <select id="cont-category-id" class="form-control" style="width:100%;margin-bottom:1rem">
                 <option value="">Без категорії</option>
                 ${catOptions}
@@ -3079,11 +3079,11 @@ window.editContractor = function(id) {
     const cont = state.contractors.find(c => c.id === id);
     if (!cont) return;
 
-    modalTitle.innerText = 'Редагувати контрагента';
+    modalTitle.innerText = 'Edit контрагента';
     const catOptions = state.categories.map(c => `<option value="${c.id}" ${cont.default_category_id === c.id ? 'selected' : ''}>${c.name} (${c.group || c.type})</option>`).join('');
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Назва (Призначення)</label>
+            <label>Назва (Purpose)</label>
             <select id="cont-category-id" class="form-control" style="width:100%;margin-bottom:1rem">
                 <option value="">Без категорії</option>
                 ${catOptions}
@@ -3154,7 +3154,7 @@ function showAddTariffModal() {
                 <option value="Lift">Ліфт (Lift)</option>
                 <option value="Gas">Газ (Gas)</option>
             </select>
-            <label>Сума (₴)</label>
+            <label>Amount (₴)</label>
             <input type="number" step="0.01" id="t-value" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="Наприклад: 5.50">
             <label>Одиниця нарахування</label>
             <select id="t-unit" class="form-control" style="width:100%">
@@ -3194,11 +3194,11 @@ async function editApartment(id) {
     const apt = state.apartments.find(a => a.id === id);
     if (!apt) return;
 
-    modalTitle.innerText = `Дія: Квартира № ${apt.number}`;
+    modalTitle.innerText = `Дія: Apartment № ${apt.number}`;
     const liftStatusText = apt.has_lift_exemption ? '<span class="color-danger">Без ліфта</span>' : '<span class="color-success">З ліфтом</span>';
     modalBody.innerHTML = `
         <div style="margin-bottom: 1rem">
-            <p><b>Власник:</b> ${apt.owner_name || '—'}</p>
+            <p><b>Owner:</b> ${apt.owner_name || '—'}</p>
             <p><b>Площа:</b> ${apt.area_m2} м²</p>
             <p style="display:flex; justify-content:space-between; align-items:center;">
                 <span><b>Ліфт:</b> ${liftStatusText}</span>
@@ -3211,7 +3211,7 @@ async function editApartment(id) {
             <label>Період застосування (місяць)</label>
             <input type="month" id="action-period" class="form-control" style="width:100%; margin-bottom: 1rem" value="${state.startDate.substring(0, 7)}" onclick="this.showPicker()">
 
-            <label>Тип дії</label>
+            <label>Type дії</label>
             <select id="action-type" class="form-control" style="width:100%; margin-bottom: 1rem">
                 <option value="adjustment">Корегування (Фінансове)</option>
                 <option value="owner_change">Зміна власника</option>
@@ -3219,7 +3219,7 @@ async function editApartment(id) {
             </select>
 
             <div id="fields-adjustment">
-                <label>Сума (+ або −)</label>
+                <label>Amount (+ або −)</label>
                 <input type="number" step="0.01" id="adj-amount" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="0.00">
                 <label>Причина</label>
                 <input type="text" id="adj-desc" class="form-control" style="width:100%">
@@ -3346,7 +3346,7 @@ window.toggleDetailsTable = function(event) {
         btn.innerHTML = '<i class="fas fa-minus"></i> Сховати деталі';
     } else {
         cont.style.display = 'none';
-        btn.innerHTML = '<i class="fas fa-plus"></i> Деталі';
+        btn.innerHTML = '<i class="fas fa-plus"></i> Details';
     }
 };
 
@@ -3440,7 +3440,7 @@ window.updateCurrentScenarioParams = async function() {
     
     const resultsContainer = document.getElementById('scenario-detail-results');
     if (resultsContainer) {
-        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Завантаження...</div>';
+        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Loading...</div>';
     }
     
     await window.generateForecastScenario(index);
@@ -3452,7 +3452,7 @@ window.renderDetailScenarioResults = function(index) {
     
     const sData = window.scenariosData[index];
     if (!sData) {
-        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Завантаження...</div>';
+        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Loading...</div>';
         return;
     }
     
@@ -3461,7 +3461,7 @@ window.renderDetailScenarioResults = function(index) {
     
     const forRows = data.map(f => `
         <tr>
-            <td style="font-weight:600">${['Січ', 'Лют', 'Бер', 'Квіт', 'Трав', 'Черв', 'Лип', 'Серп', 'Вер', 'Жовт', 'Лист', 'Груд'][parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}</td>
+            <td style="font-weight:600">${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}</td>
             <td class="color-success">+${formatCurrency(f.income_total)} ₴</td>
             <td class="color-danger">-${formatCurrency(f.expense_total)} ₴</td>
             <td class="color-danger">${f.expense_activities > 0 ? "-" + formatCurrency(f.expense_activities) + " ₴" : "0.00 ₴"}</td>
@@ -3473,7 +3473,7 @@ window.renderDetailScenarioResults = function(index) {
     resultsContainer.innerHTML = `
         <div style="overflow-x:auto; margin-bottom: 2rem;">
             <table>
-                <thead><tr><th>Місяць</th><th>Дохід (план)</th><th>Витрати (план)</th><th>Активності</th><th>Net Cash Flow</th><th>Баланс (Накопич.)</th></tr></thead>
+                <thead><tr><th>Month</th><th>Дохід (план)</th><th>Expenses (план)</th><th>Активності</th><th>Net Cash Flow</th><th>Balance (Накопич.)</th></tr></thead>
                 <tbody>${forRows || "<tr><td colspan='6' class='text-center'>Немає прогнозу</td></tr>"}</tbody>
             </table>
         </div>
@@ -3481,11 +3481,11 @@ window.renderDetailScenarioResults = function(index) {
         <h4 style="margin-bottom: 1rem;">Зведені показники</h4>
         <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); width: 100%; gap:1rem; margin-bottom: 0;">
             <div class="stat-card" style="padding: 1.5rem;">
-                <h3 style="font-size:0.85rem">План. Надходження</h3>
+                <h3 style="font-size:0.85rem">План. Inflows</h3>
                 <div class="value color-success" style="font-size: 1.5rem;">+${formatCurrency(sData.planIncome)} ₴</div>
             </div>
             <div class="stat-card" style="padding: 1.5rem;">
-                <h3 style="font-size:0.85rem">План. Витрати</h3>
+                <h3 style="font-size:0.85rem">План. Expenses</h3>
                 <div class="value color-danger" style="font-size: 1.5rem;">-${formatCurrency(sData.planExpenses)} ₴</div>
             </div>
             <div class="stat-card" style="padding: 1.5rem;">
@@ -3657,7 +3657,7 @@ window.updateScenariosCharts = async function() {
     const loaded = indices.filter(i => window.scenariosData[i]);
     if (loaded.length === 0) return;
     
-    const monthNamesUa = ['Січ', 'Лют', 'Бер', 'Квіт', 'Трав', 'Черв', 'Лип', 'Серп', 'Вер', 'Жовт', 'Лист', 'Груд'];
+    const monthNamesUa = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const firstData = window.scenariosData[loaded[0]].data;
     const forecastLabels = firstData.map(f => `${monthNamesUa[parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}`);
     
@@ -3873,7 +3873,7 @@ window.updateScenariosCharts = async function() {
         // Add row for final balances
         html += `<tr style="border-top: 2px solid var(--border-color); font-weight: 600; background: rgba(255,255,255,0.03);">
             <td colspan="3" style="padding: 0.75rem; text-align: left; color: var(--text-primary); font-weight: 600; vertical-align: middle; font-size: 0.85rem;">
-                Баланс на кінець періоду
+                Balance на кінець періоду
             </td>`;
         for(const idx of loaded) {
             const d = window.scenariosData[idx];
@@ -3905,12 +3905,12 @@ window.showAddActivityModalGlobal = function() {
     const now = new Date();
     const startMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, "0")}`;
     
-    modalTitle.innerText = 'Додати ініціативу';
+    modalTitle.innerText = 'Add Initiative';
     modalBody.innerHTML = `
         <div class="form-group">
             <label>Назва ініціативи</label>
             <input type="text" id="global-act-name" class="form-control" style="width:100%;margin-bottom:1rem">
-            <label>Сума (₴)</label>
+            <label>Amount (₴)</label>
             <input type="number" id="global-act-amount" class="form-control" style="width:100%;margin-bottom:1rem">
             <label>Місяць планування</label>
             <input type="month" id="global-act-month" class="form-control" style="width:100%" value="${startMonth}">
