@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.db
+*.bak
+*.log
+credentials.json
+token.json
+scratch*.py
+*.csv
