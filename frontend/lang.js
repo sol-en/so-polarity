@@ -88,19 +88,37 @@ document.addEventListener('DOMContentLoaded', () => {
         langBtn.onclick = window.toggleLang;
         headerActions.prepend(langBtn);
     }
-    
     // Auto translate text nodes in DOM that exactly match dictionary keys
-    function walkTextNodes(node) {
+    function translateNode(node) {
         if (node.nodeType === 3) {
             let text = node.nodeValue.trim();
-            if (dict[text]) {
+            if (text && dict[text]) {
                 node.nodeValue = node.nodeValue.replace(text, window.t(text));
             }
         } else if (node.nodeType === 1 && node.nodeName !== 'SCRIPT' && node.nodeName !== 'STYLE') {
-            for (let child of node.childNodes) {
-                walkTextNodes(child);
+            if (node.placeholder && dict[node.placeholder]) {
+                node.placeholder = window.t(node.placeholder);
             }
+            node.childNodes.forEach(translateNode);
         }
     }
-    walkTextNodes(document.body);
+    
+    if (window.currentLang !== 'en') {
+        translateNode(document.body);
+        
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(addedNode => {
+                    translateNode(addedNode);
+                });
+                if (mutation.type === 'characterData') {
+                    let text = mutation.target.nodeValue.trim();
+                    if (text && dict[text]) {
+                        mutation.target.nodeValue = mutation.target.nodeValue.replace(text, window.t(text));
+                    }
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
 });
