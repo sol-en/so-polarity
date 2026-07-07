@@ -271,7 +271,7 @@ function initNavigation() {
 async function loadPage(page) {
     if (Object.keys(state.pendingChanges).length > 0 && state.currentPage === 'apartments') {
         const proceed = await showConfirmModal(
-            'Unsaved Changes',
+            window.t('Unsaved Changes'),
             'У вас є незбережені зміни в налаштуваннях ліфта. Save їх перед переходом?'
         );
         if (proceed === 'yes') {
@@ -302,7 +302,7 @@ async function loadPage(page) {
     }
 
     state.currentPage = page;
-    contentArea.innerHTML = '<div class="loader">Loading...</div>';
+    contentArea.innerHTML = '<div class="loader">${window.t(window.t('Loading...'))}</div>';
 
     switch (page) {
         case 'dashboard': await renderDashboard(); break;
@@ -356,8 +356,8 @@ function closeModal() {
     const modalFooter = document.querySelector('.modal-footer');
     if (modalFooter) {
         modalFooter.innerHTML = `
-            <button class="btn btn-secondary close-modal" onclick="closeModal()">Cancel</button>
-            <button class="btn btn-primary" id="modal-submit">Save</button>`;
+            <button class="btn btn-secondary close-modal" onclick="closeModal()">${window.t(window.t('Cancel'))}</button>
+            <button class="btn btn-primary" id="modal-submit">${window.t(window.t('Save'))}</button>`;
     }
 }
 
@@ -433,7 +433,7 @@ function showConfirmModal(title, message) {
         modalFooter.innerHTML = `
             <button class="btn btn-secondary" id="confirm-no">Ні, відмінити зміни</button>
             <button class="btn btn-primary" id="confirm-yes">Так, зберегти</button>
-            <button class="btn btn-secondary" id="confirm-cancel">Cancel (залишитись)</button>
+            <button class="btn btn-secondary" id="confirm-cancel">${window.t('Cancel')} (залишитись)</button>
         `;
 
         document.getElementById('confirm-yes').onclick = () => { resolve('yes'); closeModal(); };
@@ -449,7 +449,7 @@ function showConfirmModal(title, message) {
 // Dashboard
 async function renderDashboard() {
     try {
-        pageTitle.innerText = 'Dashboard';
+        pageTitle.innerText = window.t('Dashboard');
 
         const res = await fetch(`${API_BASE}/dashboard/stats?start_date=${state.startDate}&end_date=${state.endDate}`);
         const data = await res.json();
@@ -471,7 +471,7 @@ async function renderDashboard() {
         const ebTotal = data.expense_breakdown.reduce((s, e) => s + e.amount, 0);
 
         // ── Detail table HTML ──
-        const detailHeaders = ['Type', 'Group', 'Purpose'].concat(data.labels).concat(['Grand Total']);
+        const detailHeaders = [window.t('Type'), window.t('Group'), window.t('Purpose')].concat(data.labels).concat(['Grand Total']);
         const detailHeadersHtml = detailHeaders.map(h => `<th>${h}</th>`).join('');
         const detailRowsHtml = data.detail_rows.map(r => {
             let cls = '';
@@ -497,7 +497,7 @@ async function renderDashboard() {
             `<tr><td>Кв. ${d.apartment || d.apt_number}</td><td>${d.owner}</td><td class="text-right color-danger">${formatCurrency(d.debt)} ₴</td></tr>`
         ).join('');
         if (otherDebt > 0) {
-            debtorsRowsHtml += `<tr class="total-row"><td>Other</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
+            debtorsRowsHtml += `<tr class="total-row"><td>${window.t(window.t('Other'))}</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
         }
 
         // ── Setup Forecast Scenarios state ──
@@ -557,25 +557,25 @@ async function renderDashboard() {
                 <div class="dash-card" id="dash-stats" style="overflow: hidden; min-height: 100px;">
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <h3>Initial Balance</h3>
+                            <h3>${window.t(window.t('Initial Balance'))}</h3>
                             <div class="value ${data.totals.start_balance < 0 ? 'color-danger' : 'color-success'}">
                                 ${formatCurrency(data.totals.start_balance)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Inflows</h3>
+                            <h3>${window.t(window.t('Inflows'))}</h3>
                             <div class="value color-success">
                                 + ${formatCurrency(data.totals.inflow)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Expenses</h3>
+                            <h3>${window.t(window.t('Expenses'))}</h3>
                             <div class="value color-danger">
                                 - ${formatCurrency(data.totals.expenses)} ₴
                             </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Final Balance</h3>
+                            <h3>${window.t(window.t('Final Balance'))}</h3>
                             <div class="value ${data.totals.balance < 0 ? 'color-danger' : 'color-success'}">
                                 ${formatCurrency(data.totals.balance)} ₴
                             </div>
@@ -598,7 +598,7 @@ async function renderDashboard() {
                 <!-- Balance Table -->
                 <div class="dash-table-card dash-card" id="dash-balance" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column;">
                     <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                        <span class="dash-section-title">Balance</span>
+                        <span class="dash-section-title">${window.t(window.t('Balance'))}</span>
                         <div>
                             <button id="toggle-details-btn" class="section-toggle-btn" style="margin-right:0.75rem;" onclick="toggleDetailsTable(event)"><i class="fas fa-plus"></i> Details</button>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
@@ -612,7 +612,7 @@ async function renderDashboard() {
                             </table>
                         </div>
                         <div id="details-table-container" style="display:none; overflow-x:auto; margin-top:2rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:1rem;">
-                            <h4 style="margin-bottom:1rem; color:var(--text-primary); font-size: 0.95rem;">Details Breakdown</h4>
+                            <h4 style="margin-bottom:1rem; color:var(--text-primary); font-size: 0.95rem;">${window.t(window.t('Details Breakdown'))}</h4>
                             <table>
                                 <thead><tr>${detailHeadersHtml}</tr></thead>
                                 <tbody>${detailRowsHtml}</tbody>
@@ -624,7 +624,7 @@ async function renderDashboard() {
                 <!-- Full-Width Initiatives Grid -->
                 <div class="dash-card dash-table-card" id="dash-initiatives" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column; width: 100%; padding: 1.5rem;">
                     <h3 style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;" data-collapsible="true">
-                        <span class="dash-section-title">Initiatives Availability</span>
+                        <span class="dash-section-title">${window.t(window.t('Initiatives Availability'))}</span>
                         <div>
                             <button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Add Initiative</button>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
@@ -632,7 +632,7 @@ async function renderDashboard() {
                     </h3>
                     <div class="collapsible-content" style="flex-grow: 1; overflow-y: auto;">
                         <div id="scenariosInitiativesGrid" style="width: 100%; overflow-x: auto;">
-                            <div class="loader" style="margin: 2rem auto;">Loading...</div>
+                            <div class="loader" style="margin: 2rem auto;">${window.t(window.t('Loading...'))}</div>
                         </div>
                     </div>
                 </div>
@@ -662,18 +662,18 @@ async function renderDashboard() {
                     <div id="scenario-params-section" class="section-collapsible" style="background: rgba(255,255,255,0.02); padding: 1rem 1.25rem; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border-color);">
                         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem;">
                             <div>
-                                <span class="dash-section-subtitle">Current Balance</span>
+                                <span class="dash-section-subtitle">${window.t(window.t('Current Balance'))}</span>
                                 <div id="scenario-balance-display" style="font-weight: 600; font-size: 1rem; padding: 4px 0; color: var(--text-primary);">0.00 ₴</div>
                             </div>
                             <div>
-                                <span class="dash-section-subtitle">Tariff (₴/m²)</span>
+                                <span class="dash-section-subtitle">${window.t(window.t('Tariff (₴/m²)'))}</span>
                                 <div class="editable-pill" style="margin-top: 4px;">
                                     <input type="number" id="scenario-tariff" step="0.1" style="width: 50px;">
                                     <span class="pill-suffix">₴/м²</span>
                                 </div>
                             </div>
                             <div>
-                                <span class="dash-section-subtitle">Expected Collection</span>
+                                <span class="dash-section-subtitle">${window.t(window.t('Expected Collection'))}</span>
                                 <div class="editable-pill" style="margin-top: 4px;">
                                     <input type="number" id="scenario-collection" max="150" style="width: 42px;">
                                     <span class="pill-suffix">%</span>
@@ -694,7 +694,7 @@ async function renderDashboard() {
                         </button>
                     </div>
                     <div id="scenario-detail-results" class="section-collapsible">
-                        <div class="loader" style="margin: 2rem auto;">Loading...</div>
+                        <div class="loader" style="margin: 2rem auto;">${window.t(window.t('Loading...'))}</div>
                     </div>
                 </div>
 
@@ -702,7 +702,7 @@ async function renderDashboard() {
                 <div id="dash-tables-row" class="dashboard-tables-grid" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; align-items: stretch;">
                     <div class="dash-table-card dash-card" id="dash-debtors" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
                         <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Debtors (Top 10)</span>
+                            <span class="dash-section-title">${window.t(window.t('Debtors (Top 10)'))}</span>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </h3>
                         <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
@@ -711,7 +711,7 @@ async function renderDashboard() {
                             </div>
                             <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
                                 <table style="width:100%">
-                                    <thead><tr><th>Apartment</th><th>Owner</th><th class="text-right">Debt</th></tr></thead>
+                                    <thead><tr><th>${window.t(window.t('Apartment'))}</th><th>${window.t(window.t('Owner'))}</th><th class="text-right">${window.t(window.t('Debt'))}</th></tr></thead>
                                     <tbody>
                                         ${debtorsRowsHtml}
                                     </tbody>
@@ -722,7 +722,7 @@ async function renderDashboard() {
                     
                     <div class="dash-table-card dash-card" id="dash-expenses" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
                         <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Expenses: Breakdown</span>
+                            <span class="dash-section-title">${window.t(window.t('Expenses: Breakdown'))}</span>
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </h3>
                         <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
@@ -731,10 +731,10 @@ async function renderDashboard() {
                             </div>
                             <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
                                 <table style="width:100%">
-                                    <thead><tr><th>Group</th><th class="text-right">%</th><th class="text-right">Amount</th></tr></thead>
+                                    <thead><tr><th>${window.t(window.t('Group'))}</th><th class="text-right">%</th><th class="text-right">${window.t(window.t('Amount'))}</th></tr></thead>
                                     <tbody>
                                         ${ebRows}
-                                        <tr class="total-row"><td>Total</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
+                                        <tr class="total-row"><td>${window.t(window.t('Total'))}</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -757,7 +757,7 @@ async function renderDashboard() {
         
 
     } catch (err) {
-        contentArea.innerHTML = `<p class="color-danger">Dashboard error: ${err.message}</p>`;
+        contentArea.innerHTML = `<p class="color-danger">${window.t('Dashboard')} error: ${err.message}</p>`;
     }
 }
 
@@ -787,7 +787,7 @@ function renderDashboardCharts(data) {
     const pieLabels = topDebtors.map(d => `Кв. ${d.apartment || d.apt_number} - ${d.owner} (${formatCurrency(d.debt)} ₴)`);
     const pieData = topDebtors.map(d => d.debt);
     if (otherDebt > 0) {
-        pieLabels.push('Other');
+        pieLabels.push(window.t('Other'));
         pieData.push(otherDebt);
     }
     
@@ -896,7 +896,7 @@ async function renderApartments() {
         const hasChanges = Object.keys(state.pendingChanges).length > 0;
 
         const rows = state.apartments
-            .filter(a => !a.number.includes('Total'))
+            .filter(a => !a.number.includes(window.t('Total')))
             .map(a => {
                 const pending = state.pendingChanges[a.id];
                 const hasLiftExemption = pending !== undefined ? pending.has_lift_exemption : a.has_lift_exemption;
@@ -931,8 +931,8 @@ async function renderApartments() {
                 <table>
                     <thead>
                         <tr>
-                            <th>№</th><th>Owner</th><th>Площа</th>
-                            <th>Ліфт</th><th>Balance</th><th>Дії</th>
+                            <th>№</th><th>${window.t(window.t('Owner'))}</th><th>Площа</th>
+                            <th>Ліфт</th><th>${window.t(window.t('Balance'))}</th><th>Дії</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -1054,7 +1054,7 @@ async function fetchAndShowInlineLogs(id) {
             <div class="table-container" style="background: transparent; box-shadow: none; border: 1px solid var(--border-color)">
                 <table style="width: 100%; font-size: 0.85rem">
                     <thead>
-                        <tr><th>Дата запису</th><th>Застосовано з</th><th>Type</th><th>Значення</th></tr>
+                        <tr><th>Дата запису</th><th>Застосовано з</th><th>${window.t(window.t('Type'))}</th><th>Значення</th></tr>
                     </thead>
                     <tbody>
                         ${logs.length ? rows : '<tr><td colspan="4" style="text-align:center">Логів поки немає</td></tr>'}
@@ -1087,7 +1087,7 @@ async function renderTransactions() {
 
         // Compute extra fields for filtering and display
         txs = txs.map(tx => {
-            const typeStr = tx.category ? (tx.category.type === 'income' ? 'Inflows' : 'Витрата') : '—';
+            const typeStr = tx.category ? (tx.category.type === 'income' ? window.t('Inflows') : 'Витрата') : '—';
             const groupStr = tx.category ? (tx.category.name || '—') : '—';
             const purposeStr = tx.description || '—';
 
@@ -1189,7 +1189,7 @@ async function renderTransactions() {
                 tag = '<span style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:var(--success); color:#fff; font-weight:600">READY</span>';
             }
             const isMatched = p.match_status === 'matched' || p.match_status === 'mapped';
-            const typeLabel = isExpense ? 'Витрата' : 'Inflows';
+            const typeLabel = isExpense ? 'Витрата' : window.t('Inflows');
             
             let linkInfo = '—';
             let actionBtn = '';
@@ -1270,11 +1270,11 @@ async function renderTransactions() {
                     <thead>
                         <tr>
                             ${sortTh('date', 'Дата')}
-                            ${sortTh('type', 'Type')}
-                            ${sortTh('group', 'Group')}
-                            ${sortTh('purpose', 'Purpose')}
+                            ${sortTh('type', window.t('Type'))}
+                            ${sortTh('group', window.t('Group'))}
+                            ${sortTh('purpose', window.t('Purpose'))}
                             ${sortTh('counterparty', 'Контрагент')}
-                            ${sortTh('amount', 'Amount')}
+                            ${sortTh('amount', window.t('Amount'))}
                             ${sortTh('comment', 'Коментар')}
                             <th>Дії</th>
                         </tr>
@@ -1353,7 +1353,7 @@ function getCpTypeForCategory(cat) {
 
 function renderCpField(cpType, selectedValue) {
     if (cpType === 'apartment') {
-        const opts = state.apartments.filter(a => !a.number.includes('Total')).map(a =>
+        const opts = state.apartments.filter(a => !a.number.includes(window.t('Total'))).map(a =>
             `<option value="${a.id}" ${a.id == selectedValue ? 'selected' : ''}>Кв. ${a.number} (${a.owner_name || 'Невідомо'})</option>`
         ).join('');
         return `<select id="tx-cp-value" class="form-control"><option value="">-- Оберіть квартиру --</option>${opts}</select>`;
@@ -1398,14 +1398,14 @@ window.showAddTransactionModal = function (templateTx = null) {
 
     // Sort categories alphabetically: by type label then by name
     const sortedCats = [...state.categories].sort((a, b) => {
-        const typeA = a.type === 'income' ? 'Inflows' : 'Витрата';
-        const typeB = b.type === 'income' ? 'Inflows' : 'Витрата';
+        const typeA = a.type === 'income' ? window.t('Inflows') : 'Витрата';
+        const typeB = b.type === 'income' ? window.t('Inflows') : 'Витрата';
         if (typeA !== typeB) return typeA.localeCompare(typeB, 'uk');
         return (a.name || '').localeCompare(b.name || '', 'uk');
     });
 
     const catOptions = sortedCats.map(c =>
-        `<option value="${c.id}" ${c.id == dCatId ? 'selected' : ''}>[${c.type === 'income' ? 'Inflows' : 'Витрата'}] ${c.name}</option>`
+        `<option value="${c.id}" ${c.id == dCatId ? 'selected' : ''}>[${c.type === 'income' ? window.t('Inflows') : 'Витрата'}] ${c.name}</option>`
     ).join('');
 
     const selectedCat = state.categories.find(c => c.id == dCatId);
@@ -1430,11 +1430,11 @@ window.showAddTransactionModal = function (templateTx = null) {
                 <div id="cp-field-container">${selectedCat ? renderCpField(cpType, dCpValue) : ''}</div>
             </div>
             <div class="form-group" style="margin-bottom:1rem">
-                <label>Amount (₴)</label>
+                <label>${window.t('Amount')} (₴)</label>
                 <input type="number" id="tx-amount" class="form-control" step="0.01" required value="${dAmount}">
             </div>
             <div class="form-group" style="margin-bottom:1rem">
-                <label>Purpose (опціонально)</label>
+                <label>${window.t('Purpose')} (опціонально)</label>
                 <input type="text" id="tx-desc" class="form-control" value="${dDesc}">
             </div>
             <div class="form-group" style="margin-bottom:1rem">
@@ -1550,7 +1550,7 @@ window.uploadTransactions = async function(event) {
 
     try {
         const btn = document.querySelector('button[title="Імпорт транзакцій з ПриватБанку (Excel)"]');
-        if (btn) btn.innerText = 'Loading...';
+        if (btn) btn.innerText = window.t('Loading...');
 
         const res = await fetch(`${API_BASE}/transactions/upload`, {
             method: 'POST',
@@ -1680,7 +1680,7 @@ window.openBankMapModal = async function(paymentId) {
         
         modalTitle.innerText = `Зв'язати платіж`;
         
-        const aptOpts = state.apartments.filter(a => !a.number.includes('Total')).map(a => 
+        const aptOpts = state.apartments.filter(a => !a.number.includes(window.t('Total'))).map(a => 
             `<option value="${a.id}" ${p.suggested_apartment_id === a.id || p.apartment_id === a.id ? 'selected' : ''}>Кв. ${a.number} (${a.owner_name || 'Невідомо'})</option>`
         ).join('');
         
@@ -1721,7 +1721,7 @@ window.openBankMapModal = async function(paymentId) {
                     </label>
                     
                     <div id="bank-map-key-type-wrap" style="display:none; margin-top:1rem">
-                        <label>Type ключа</label>
+                        <label>${window.t('Type')} ключа</label>
                         <select id="bank-map-key-type" class="form-control">
                             <option value="payer_name">Точний збіг платника (${p.payer_name || p.correspondent_name})</option>
                             <option value="address_substring">Містить в призначенні (${p.payer_address || p.purpose})</option>
@@ -1913,7 +1913,7 @@ async function fetchAndRenderReport() {
                     <th class="text-right">Нараховано<br><small>(За період)</small></th>
                     <th class="text-right">Сплачено<br><small>(За період)</small></th>
                     <th class="text-right">Кінц. борг<br><small>(${formatPeriod(months[months.length-1])})</small></th>
-                    <th>Details Breakdown</th>
+                    <th>${window.t(window.t('Details Breakdown'))}</th>
                 </tr>`;
         }
 
@@ -1967,7 +1967,7 @@ async function fetchAndRenderReport() {
                             <table style="width:100%; font-size:0.85rem; margin:0">
                                 <thead>
                                     <tr style="background:transparent; border-bottom:1px solid rgba(255,255,255,0.1)">
-                                        <th>Month</th>
+                                        <th>${window.t(window.t('Month'))}</th>
                                         <th class="text-right">Поч. борг</th>
                                         <th class="text-right">Утрим.</th>
                                         <th class="text-right">Ліфт</th>
@@ -2406,9 +2406,9 @@ async function printReceipts() {
                     <hr class="r-line">
                     <div class="r-row"><span>Нараховано <b>${periodStr}</b></span> <span><b>${ch.total.toFixed(2)} грн.</b></span></div>
                     <div class="r-row"><span>Корегування</span> <span>${ch.adjustment.toFixed(2)} грн.</span></div>
-                    <div class="r-row"><span><b>Debt</b> ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row"><span><b>${window.t(window.t('Debt'))}</b> ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
                     <div class="r-row"><span><b>Сплачено</b> ${periodStr}</span> <span><b>${rep.monthly_details[0].payment.toFixed(2)} грн.</b></span></div>
-                    <div class="r-row r-total"><span><b>Debt</b> ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-total"><span><b>${window.t(window.t('Debt'))}</b> ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
                     <div class="r-footer">
                         <div>бухгалтер Олена Олександрівна тел. 098 206 0931</div>
@@ -2442,7 +2442,7 @@ async function renderDebtors() {
     if (!previewArea) return;
 
     try {
-        previewArea.innerHTML = '<div class="loader">Loading...</div>';
+        previewArea.innerHTML = '<div class="loader">${window.t(window.t('Loading...'))}</div>';
         if (state.apartments.length === 0) await fetchApartments();
 
         const debtors = state.apartments.filter(a => (a.current_balance || 0) < 0).sort((a, b) => a.current_balance - b.current_balance);
@@ -2461,8 +2461,8 @@ async function renderDebtors() {
                     <thead>
                         <tr style="background: rgba(255,255,255,0.05);">
                             <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">№ Квартири</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Owner</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Debt</th>
+                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">${window.t(window.t('Owner'))}</th>
+                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">${window.t(window.t('Debt'))}</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -2496,7 +2496,7 @@ async function renderSettings() {
     const hasChanges = Object.keys(state.pendingChanges || {}).length > 0;
     
     const aptRows = state.apartments
-        .filter(a => !a.number.includes('Total'))
+        .filter(a => !a.number.includes(window.t('Total')))
         .map(a => {
             return `
             <tr onclick="toggleInlineLogs(${a.id})" id="row-${a.id}" style="cursor:pointer">
@@ -2533,7 +2533,7 @@ async function renderSettings() {
                         <thead>
                             <tr>
                                 <th style="padding: 0.3rem 0.5rem; width: 15%;">№</th>
-                                <th style="padding: 0.3rem 0.5rem; width: 50%;">Owner</th>
+                                <th style="padding: 0.3rem 0.5rem; width: 50%;">${window.t(window.t('Owner'))}</th>
                                 <th style="padding: 0.3rem 0.5rem; width: 20%;">Площа</th>
                                 <th style="padding: 0.3rem 0.5rem; width: 15%;">Дії</th>
                             </tr>
@@ -2845,7 +2845,7 @@ async function loadCategoriesSettings() {
         // Build two-level tree: Type → Group → [categories]
         const tree = {};
         cats.forEach(c => {
-            const tLabel = c.type === 'income' ? 'Inflows' : 'Expenses';
+            const tLabel = c.type === 'income' ? window.t('Inflows') : window.t('Expenses');
             const grp = c.group || c.name;
             if (!tree[tLabel]) tree[tLabel] = {};
             if (!tree[tLabel][grp]) tree[tLabel][grp] = [];
@@ -2854,10 +2854,10 @@ async function loadCategoriesSettings() {
 
         let html = '';
         for (const [tLabel, groups] of Object.entries(tree)) {
-            const typeColor = tLabel === 'Inflows' ? 'var(--success)' : 'var(--danger)';
+            const typeColor = tLabel === window.t('Inflows') ? 'var(--success)' : 'var(--danger)';
             html += `<div style="margin-bottom:0.5rem">
                 <div style="font-weight:700; font-size:0.8rem; color:${typeColor}; padding:0.3rem 0.5rem; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid rgba(255,255,255,0.08)">
-                    ${tLabel === 'Inflows' ? '↓' : '↑'} ${tLabel}
+                    ${tLabel === window.t('Inflows') ? '↓' : '↑'} ${tLabel}
                 </div>`;
             for (const [grp, items] of Object.entries(groups)) {
                 html += `<div style="padding-left:0.5rem; border-left:2px solid rgba(255,255,255,0.1); margin:0.25rem 0 0.25rem 0.5rem">
@@ -2888,12 +2888,12 @@ window.showAddCategoryModal = function() {
 
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Type операції</label>
+            <label>${window.t('Type')} операції</label>
             <select id="cat-type" class="form-control" style="width:100%;margin-bottom:1rem">
-                <option value="income">Inflows</option>
+                <option value="income">${window.t(window.t('Inflows'))}</option>
                 <option value="expense">Витрата</option>
             </select>
-            <label>Group призначення</label>
+            <label>${window.t('Group')} призначення</label>
             <input type="text" id="cat-group" class="form-control" list="cat-group-list" style="width:100%;margin-bottom:1rem" placeholder="Наприклад: Ліфт, Прибирання, Квартплата">
             <datalist id="cat-group-list">${groupOptions}</datalist>
             <label>Назва (Purpose)</label>
@@ -2933,12 +2933,12 @@ window.editCategory = function(id) {
 
     modalBody.innerHTML = `
         <div class="form-group">
-            <label>Type операції</label>
+            <label>${window.t('Type')} операції</label>
             <select id="cat-type" class="form-control" style="width:100%;margin-bottom:1rem">
-                <option value="income" ${cat.type === 'income' ? 'selected' : ''}>Inflows</option>
+                <option value="income" ${cat.type === 'income' ? 'selected' : ''}>${window.t(window.t('Inflows'))}</option>
                 <option value="expense" ${cat.type === 'expense' ? 'selected' : ''}>Витрата</option>
             </select>
-            <label>Group призначення</label>
+            <label>${window.t('Group')} призначення</label>
             <input type="text" id="cat-group" class="form-control" list="cat-group-list" style="width:100%;margin-bottom:1rem" value="${cat.group || ''}">
             <datalist id="cat-group-list">${groupOptions}</datalist>
             <label>Назва (Purpose)</label>
@@ -3006,8 +3006,8 @@ async function loadContractorsSettings() {
 
         let html = '';
         const sections = [
-            { key: 'income', label: 'Inflows', color: 'var(--success)', icon: '↓' },
-            { key: 'expense', label: 'Expenses', color: 'var(--danger)', icon: '↑' },
+            { key: 'income', label: window.t('Inflows'), color: 'var(--success)', icon: '↓' },
+            { key: 'expense', label: window.t('Expenses'), color: 'var(--danger)', icon: '↑' },
             { key: 'other', label: 'Без категорії', color: 'var(--text-secondary)', icon: '•' }
         ];
         for (const sec of sections) {
@@ -3154,7 +3154,7 @@ function showAddTariffModal() {
                 <option value="Lift">Ліфт (Lift)</option>
                 <option value="Gas">Газ (Gas)</option>
             </select>
-            <label>Amount (₴)</label>
+            <label>${window.t('Amount')} (₴)</label>
             <input type="number" step="0.01" id="t-value" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="Наприклад: 5.50">
             <label>Одиниця нарахування</label>
             <select id="t-unit" class="form-control" style="width:100%">
@@ -3211,7 +3211,7 @@ async function editApartment(id) {
             <label>Період застосування (місяць)</label>
             <input type="month" id="action-period" class="form-control" style="width:100%; margin-bottom: 1rem" value="${state.startDate.substring(0, 7)}" onclick="this.showPicker()">
 
-            <label>Type дії</label>
+            <label>${window.t('Type')} дії</label>
             <select id="action-type" class="form-control" style="width:100%; margin-bottom: 1rem">
                 <option value="adjustment">Корегування (Фінансове)</option>
                 <option value="owner_change">Зміна власника</option>
@@ -3219,7 +3219,7 @@ async function editApartment(id) {
             </select>
 
             <div id="fields-adjustment">
-                <label>Amount (+ або −)</label>
+                <label>${window.t('Amount')} (+ або −)</label>
                 <input type="number" step="0.01" id="adj-amount" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="0.00">
                 <label>Причина</label>
                 <input type="text" id="adj-desc" class="form-control" style="width:100%">
@@ -3440,7 +3440,7 @@ window.updateCurrentScenarioParams = async function() {
     
     const resultsContainer = document.getElementById('scenario-detail-results');
     if (resultsContainer) {
-        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Loading...</div>';
+        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">${window.t(window.t('Loading...'))}</div>';
     }
     
     await window.generateForecastScenario(index);
@@ -3452,7 +3452,7 @@ window.renderDetailScenarioResults = function(index) {
     
     const sData = window.scenariosData[index];
     if (!sData) {
-        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">Loading...</div>';
+        resultsContainer.innerHTML = '<div class="loader" style="margin: 2rem auto;">${window.t(window.t('Loading...'))}</div>';
         return;
     }
     
@@ -3473,7 +3473,7 @@ window.renderDetailScenarioResults = function(index) {
     resultsContainer.innerHTML = `
         <div style="overflow-x:auto; margin-bottom: 2rem;">
             <table>
-                <thead><tr><th>Month</th><th>Дохід (план)</th><th>Expenses (план)</th><th>Активності</th><th>Net Cash Flow</th><th>Balance (Накопич.)</th></tr></thead>
+                <thead><tr><th>${window.t(window.t('Month'))}</th><th>Дохід (план)</th><th>${window.t('Expenses')} (план)</th><th>Активності</th><th>Net Cash Flow</th><th>${window.t('Balance')} (Накопич.)</th></tr></thead>
                 <tbody>${forRows || "<tr><td colspan='6' class='text-center'>Немає прогнозу</td></tr>"}</tbody>
             </table>
         </div>
@@ -3905,12 +3905,12 @@ window.showAddActivityModalGlobal = function() {
     const now = new Date();
     const startMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, "0")}`;
     
-    modalTitle.innerText = 'Add Initiative';
+    modalTitle.innerText = window.t('Add Initiative');
     modalBody.innerHTML = `
         <div class="form-group">
             <label>Назва ініціативи</label>
             <input type="text" id="global-act-name" class="form-control" style="width:100%;margin-bottom:1rem">
-            <label>Amount (₴)</label>
+            <label>${window.t('Amount')} (₴)</label>
             <input type="number" id="global-act-amount" class="form-control" style="width:100%;margin-bottom:1rem">
             <label>Місяць планування</label>
             <input type="month" id="global-act-month" class="form-control" style="width:100%" value="${startMonth}">
