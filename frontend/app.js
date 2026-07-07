@@ -421,7 +421,7 @@ window.formatPeriodStr = function(periodStr) {
     if (!periodStr || !periodStr.includes('-')) return periodStr || '—';
     const [y, m] = periodStr.split('-');
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${months[parseInt(m)-1]} ${y}`;
+    return `${window.t ? window.t(months[parseInt(m)-1]) : months[parseInt(m)-1]} ${y}`;
 };
 
 function showConfirmModal(title, message) {
@@ -507,8 +507,8 @@ async function renderDashboard() {
         const actualMonths = data.months.filter(m => m < currentMonthStr);
         const forecastMonths = data.months.filter(m => m >= currentMonthStr);
         
-        window.globalForecastStartMonth = forecastMonths.length > 0 ? forecastMonths[0] : currentMonthStr;
-        window.globalForecastEndMonth = forecastMonths.length > 0 ? forecastMonths[forecastMonths.length - 1] : currentMonthStr;
+        window.globalForecastStartMonth = forecastMonths.length > 0 ? forecastMonths[0] : null;
+        window.globalForecastEndMonth = forecastMonths.length > 0 ? forecastMonths[forecastMonths.length - 1] : null;
         
         const startBal = actualMonths.length > 0 ? data.balance[actualMonths.length - 1] : data.totals.start_balance;
 
@@ -1247,7 +1247,7 @@ async function renderTransactions() {
                         <i class="fas fa-exclamation-triangle"></i> Показати з помилками
                     </button>
                     
-                    <button class="btn btn-primary" onclick="syncGmailRegistries()" title="Автоматично стягнути реєстри з пошти за обраний період" style="background: var(--success); border-color: var(--success);">
+                    <button class="btn btn-success" onclick="syncGmailRegistries()" title="Автоматично стягнути реєстри з пошти за обраний період">
                         <i class="fab fa-google"></i> Синхронізація Gmail
                     </button>
                     
@@ -3578,6 +3578,21 @@ window.generateForecastScenario = async function(index) {
     const startMonth = window.globalForecastStartMonth;
     const endMonth = window.globalForecastEndMonth;
     
+    if (!startMonth || !endMonth) {
+        if (!window.scenariosData) window.scenariosData = {};
+        window.scenariosData[index] = {
+            data: [],
+            planIncome: 0,
+            planExpenses: 0,
+            finalBalance: params.balance
+        };
+        await window.updateScenariosCharts();
+        if (window.currentDetailScenarioIndex === index) {
+            window.renderDetailScenarioResults(index);
+        }
+        return;
+    }
+    
     try {
         const res = await fetch(`${API_BASE}/forecast/custom`, {
             method: "POST",
@@ -3716,6 +3731,8 @@ window.updateScenariosCharts = async function() {
         // Bridge from last actual balance into forecast
         const bridgeVal = actualCount > 0 ? actuals.balance[actualCount - 1] : null;
         const forecastValues = d.data.map(f => f.cumulative);
+        if (forecastValues.length === 0) continue; // Skip if no forecast
+        
         const scenarioData = actualCount > 0
             ? [...new Array(actualCount - 1).fill(null), bridgeVal, ...forecastValues]
             : forecastValues;
@@ -3902,30 +3919,99 @@ window.toggleScenarioActivity = async function(index, actId) {
     await window.generateForecastScenario(index);
 }
 
+window.globalActYear = new Date().getFullYear();
+
+window.renderGlobalActMonthGrid = function() {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const targetVal = state.newActivityMonth || '';
+    
+    const yearDisp = document.getElementById('global-act-year-display');
+    if (yearDisp) yearDisp.innerText = window.globalActYear;
+    
+    const html = months.map((m, i) => {
+        const pStr = `${window.globalActYear}-${String(i + 1).padStart(2, '0')}`;
+        const isActive = pStr === targetVal;
+        // month-cell class has hover styles in CSS
+        return `<div class="month-cell ${isActive ? 'active' : ''}" style="text-align:center; padding:0.5rem; border-radius:4px; cursor:pointer;" onclick="selectGlobalActMonth('${pStr}')">${window.t(m)}</div>`;
+    }).join('');
+    
+    const grid = document.getElementById('global-act-month-grid');
+    if (grid) grid.innerHTML = html;
+};
+
+window.changeGlobalActYear = function(delta) {
+    window.globalActYear += delta;
+    window.renderGlobalActMonthGrid();
+};
+
+window.selectGlobalActMonth = function(pStr) {
+    state.newActivityMonth = pStr;
+    const txt = document.getElementById('global-act-month-text');
+    if (txt) txt.innerText = window.formatPeriodStr(pStr);
+    
+    const dropdown = document.getElementById('global-act-month-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    
+    window.renderGlobalActMonthGrid();
+};
+
 window.showAddActivityModalGlobal = function() {
     const now = new Date();
     const startMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, "0")}`;
+    state.newActivityMonth = startMonth;
+    window.globalActYear = now.getFullYear();
     
     modalTitle.innerText = 'Add Initiative';
     modalBody.innerHTML = `
         <div class="form-group">
             <label>Назва ініціативи</label>
-            <input type="text" id="global-act-name" class="form-control" style="width:100%;margin-bottom:1rem">
+            <input type="text" id="global-act-name" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="Назва">
             <label>Amount (₴)</label>
-            <input type="number" id="global-act-amount" class="form-control" style="width:100%;margin-bottom:1rem">
+            <input type="number" id="global-act-amount" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="0.00">
             <label>Місяць планування</label>
-            <input type="month" id="global-act-month" class="form-control" style="width:100%" value="${startMonth}">
+            <div style="position: relative;">
+                <button type="button" id="global-act-month-btn" class="form-control" style="width:100%; text-align:left; cursor:pointer; background:var(--bg-input); border:1px solid var(--border-color); color:var(--text-primary); display:flex; justify-content:space-between; align-items:center;" onclick="const dd = document.getElementById('global-act-month-dropdown'); dd.style.display = dd.style.display === 'none' ? 'block' : 'none'">
+                    <span><i class="far fa-calendar-alt"></i> <span id="global-act-month-text">${window.formatPeriodStr(startMonth)}</span></span>
+                    <i class="fas fa-caret-down"></i>
+                </button>
+                <div id="global-act-month-dropdown" style="display:none; position:absolute; top:110%; left:0; width:100%; background:var(--dropdown-bg, var(--bg-card)); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5); z-index:1000; padding:1rem; backdrop-filter: blur(16px);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="changeGlobalActYear(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <span id="global-act-year-display" style="font-weight: 600; font-size: 1.1rem;">${window.globalActYear}</span>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="changeGlobalActYear(1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div id="global-act-month-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+            </div>
         </div>`;
     modal.style.display = 'flex';
+    
+    // Initial render of the grid
+    window.renderGlobalActMonthGrid();
+
+    // Close dropdown if clicked outside
+    document.addEventListener('click', function _closeDropdown(e) {
+        const btn = document.getElementById('global-act-month-btn');
+        const dropdown = document.getElementById('global-act-month-dropdown');
+        if (!btn || !dropdown) {
+            document.removeEventListener('click', _closeDropdown);
+            return;
+        }
+        if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
 
     const submitBtn = document.getElementById('modal-submit');
     if (submitBtn) {
         submitBtn.onclick = async () => {
             const name = document.getElementById('global-act-name').value.trim();
             const amt = parseFloat(document.getElementById('global-act-amount').value);
-            const month = document.getElementById('global-act-month').value;
+            const month = state.newActivityMonth;
             
-            if (!name || !amt || !month) return alert('Заповніть всі поля');
+            if (!name || !amt || !month) return alert('Заповніть всі поля / Fill all fields');
 
             try {
                 await fetch(`${API_BASE}/forecast/activities`, {

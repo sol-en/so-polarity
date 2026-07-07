@@ -158,10 +158,20 @@ body {
 
 .btn-primary {
     background: var(--accent-color);
-    color: #000;
+    color: #ffffff;
 }
 
 .btn-primary:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: var(--success);
+    color: #ffffff;
+}
+
+.btn-success:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
 }
@@ -882,6 +892,24 @@ body.light-theme .btn-secondary {
 }
 body.light-theme .btn-secondary:hover {
     background: #cbd5e1;
+}
+
+body.light-theme .btn-primary {
+    background: #509db3;
+    color: #ffffff;
+    border: none;
+}
+body.light-theme .btn-primary:hover {
+    background: #418699;
+}
+
+body.light-theme .btn-success {
+    background: #4ea873;
+    color: #ffffff;
+    border: none;
+}
+body.light-theme .btn-success:hover {
+    background: #409261;
 }
 
 body.light-theme .custom-month-picker,
