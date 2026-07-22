@@ -10,6 +10,7 @@ class ApartmentBase(BaseModel):
     residents_count: Optional[int] = 0
     initial_balance: Optional[float] = 0.0
     current_balance: Optional[float] = 0.0
+    email: Optional[str] = None
 
 class ApartmentCreate(ApartmentBase):
     pass
@@ -146,6 +147,8 @@ class ApartmentReport(BaseModel):
     apartment_id: int
     apartment_number: str
     owner_name: Optional[str]
+    area_m2: Optional[float] = None
+    email: Optional[str] = None
     start_balance: float
     end_balance: float
     total_charges: float

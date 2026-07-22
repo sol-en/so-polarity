@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HOA Accounting - Financial System</title>
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=8">
     <link rel="stylesheet" href="print.css" media="print">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,9 +13,36 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/plugins/ranges.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-    <div class="app-container">
+    <!-- Login Overlay -->
+    <div id="login-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-main, #0f172a); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+        <div class="login-box" style="background: var(--bg-card, #1e293b); padding: 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid var(--border-color, #334155); width: 400px; max-width: 90%;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🏠</div>
+            <h2 style="margin-bottom: 0.5rem; color: var(--text-primary, #f8fafc);">HOA Accounting</h2>
+            <p style="margin-bottom: 2rem; color: var(--text-secondary, #94a3b8);">Вхід в систему</p>
+            <div id="g_id_onload"
+                 data-client_id="813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com"
+                 data-context="signin"
+                 data-ux_mode="popup"
+                 data-callback="handleGoogleLogin"
+                 data-auto_prompt="false">
+            </div>
+            <div class="g_id_signin"
+                 data-type="standard"
+                 data-shape="rectangular"
+                 data-theme="outline"
+                 data-text="signin_with"
+                 data-size="large"
+                 data-logo_alignment="left"
+                 style="display: flex; justify-content: center;">
+            </div>
+            <div id="login-error" style="color: #ef4444; margin-top: 1rem; font-size: 0.9rem; display: none;"></div>
+        </div>
+    </div>
+
+    <div class="app-container" id="main-app" style="display: none;">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -38,6 +65,7 @@
                     <div class="avatar">👤</div>
                     <span>Administrator</span>
                 </div>
+                <div id="resident-info-display" style="display: none; margin-top: 0.8rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.8rem"></div>
             </div>
         </aside>
 
@@ -140,8 +168,9 @@
 
     <div class="print-container" id="print-area"></div>
 
+    <script src="auth.js?v=2"></script>
     <script src="lang.js?v=1"></script>
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=38"></script>
 
 </body>
 </html>

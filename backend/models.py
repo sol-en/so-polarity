@@ -148,3 +148,13 @@ class ContractorCharge(Base):
     
     contractor = relationship("Contractor", backref="charges")
     obligation = relationship("ContractorObligation")
+
+class UserAccess(Base):
+    __tablename__ = "user_access"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    role = Column(String, nullable=False, default="resident")
+    apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    apartment = relationship("Apartment")

@@ -446,6 +446,43 @@ function showConfirmModal(title, message) {
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
+window.goToTransactionsFilter = function(type, group, purpose, month) {
+    if (month) {
+        const [year, mo] = month.split('-');
+        const lastDay = new Date(parseInt(year), parseInt(mo), 0).getDate();
+        state.startDate = `${year}-${mo}-01`;
+        state.endDate = `${year}-${mo}-${String(lastDay).padStart(2, '0')}`;
+        if (window.globalPicker) {
+            window.globalPicker.setDateRange(state.startDate, state.endDate);
+        }
+    }
+    
+    if (purpose) {
+        state.txSearch = purpose;
+    } else if (type) {
+        if (type.includes('Витрат')) {
+            state.txSearch = 'Витрата';
+        } else if (type.includes('Надходження') || type.includes('Inflow')) {
+            state.txSearch = 'Inflows';
+        } else {
+            state.txSearch = type;
+        }
+    } else {
+        state.txSearch = '';
+    }
+    
+    const navItems = document.querySelectorAll('.sidebar-nav li');
+    navItems.forEach(n => {
+        if (n.getAttribute('data-page') === 'transactions') {
+            n.classList.add('active');
+        } else {
+            n.classList.remove('active');
+        }
+    });
+    
+    loadPage('transactions');
+};
+
 // Dashboard
 async function renderDashboard() {
     try {
@@ -460,7 +497,24 @@ async function renderDashboard() {
         // ── Balance table HTML ──
         const bt = data.balance_table;
         const btHeaders = bt.headers.map(h => `<th>${h}</th>`).join('');
-        const btRows = bt.rows.map(r => `<tr><td>${r.label}</td>${r.values.map(v => `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${formatCurrency(v)}</td>`).join('')}</tr>`).join('');
+        const btRows = bt.rows.map(r => {
+            const valCells = r.values.map((v, i) => {
+                const formattedVal = formatCurrency(v);
+                const isGrandTotal = (i === r.values.length - 1);
+                const monthVal = isGrandTotal ? '' : data.months[i];
+                const tooltipText = isGrandTotal 
+                    ? 'Подвійний клік: показати транзакції за весь період' 
+                    : `Подвійний клік: показати транзакції за ${data.labels[i]}`;
+                
+                return `<td class="text-right ${v < 0 ? 'color-danger' : ''}" 
+                            style="cursor: pointer; transition: background 0.2s;" 
+                            title="${tooltipText}" 
+                            onmouseover="this.style.background='rgba(56,189,248,0.1)'" 
+                            onmouseout="this.style.background=''" 
+                            ondblclick="window.goToTransactionsFilter('${r.label}', '', '', '${monthVal}')">${formattedVal}</td>`;
+            }).join('');
+            return `<tr><td>${r.label}</td>${valCells}</tr>`;
+        }).join('');
         const btGrandRow = `<tr class="total-row"><td>${bt.grand_total.label}</td>${bt.grand_total.values.map(v => `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${formatCurrency(v)}</td>`).join('')}</tr>`;
         const btBalanceRow = `<tr style="background:rgba(56,189,248,0.08)"><td style="font-weight:600">${bt.balance_row.label}</td>${bt.balance_row.values.map(v => `<td class="text-right" style="font-weight:600">${formatCurrency(v)}</td>`).join('')}</tr>`;
 
@@ -479,7 +533,25 @@ async function renderDashboard() {
             else if (r.level === 'type_total') cls = 'total-row';
             else if (r.level === 'group_total') cls = 'subtotal-row';
             
-            const valCells = r.values.map(v => `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${v !== 0 ? formatCurrency(v) : ''}</td>`).join('');
+            const valCells = r.values.map((v, i) => {
+                const formattedVal = v !== 0 ? formatCurrency(v) : '';
+                if (r.level === 'item' && v !== 0) {
+                    const isGrandTotal = (i === r.values.length - 1);
+                    const monthVal = isGrandTotal ? '' : data.months[i];
+                    const tooltipText = isGrandTotal 
+                        ? 'Подвійний клік: показати транзакції за весь період' 
+                        : `Подвійний клік: показати транзакції за ${data.labels[i]}`;
+                    
+                    return `<td class="text-right ${v < 0 ? 'color-danger' : ''}" 
+                                style="cursor: pointer; transition: background 0.2s;" 
+                                title="${tooltipText}" 
+                                onmouseover="this.style.background='rgba(56,189,248,0.1)'" 
+                                onmouseout="this.style.background=''" 
+                                ondblclick="window.goToTransactionsFilter('${r.type}', '${r.group}', '${r.purpose}', '${monthVal}')">${formattedVal}</td>`;
+                }
+                return `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${formattedVal}</td>`;
+            }).join('');
+            
             return `<tr class="${cls}"><td>${r.type}</td><td>${r.group}</td><td>${r.purpose}</td>${valCells}</tr>`;
         }).join('');
 
@@ -626,7 +698,7 @@ async function renderDashboard() {
                     <h3 style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;" data-collapsible="true">
                         <span class="dash-section-title">Initiatives Availability</span>
                         <div>
-                            <button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Add Initiative</button>
+                            ${(currentUser && currentUser.role === 'resident') ? '' : `<button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Add Initiative</button>`}
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </div>
                     </h3>
@@ -1066,6 +1138,15 @@ async function fetchAndShowInlineLogs(id) {
     }
 }
 
+function normalizeSearchString(str) {
+    if (!str) return '';
+    return str.toString().toLowerCase()
+              .replace(/i/g, 'і')
+              .replace(/ı/g, 'і')
+              .replace(/\u0069/g, '\u0456') // latin small i -> cyrillic small i
+              .replace(/\u0049/g, '\u0406'); // latin capital I -> cyrillic capital I
+}
+
 // Transactions
 async function renderTransactions() {
     try {
@@ -1107,16 +1188,16 @@ async function renderTransactions() {
 
         // Apply Search — match against ALL visible fields including formatted amount
         if (state.txSearch) {
-            const s = state.txSearch.toLowerCase();
+            const s = normalizeSearchString(state.txSearch);
             txs = txs.filter(tx =>
-                (tx.date && tx.date.toLowerCase().includes(s)) ||
-                tx._typeStr.toLowerCase().includes(s) ||
-                tx._groupStr.toLowerCase().includes(s) ||
-                tx._purposeStr.toLowerCase().includes(s) ||
-                tx._counterpartyStr.toLowerCase().includes(s) ||
-                (tx.comment && tx.comment.toLowerCase().includes(s)) ||
-                tx._amountStr.includes(s) ||
-                String(tx.amount).includes(s)
+                normalizeSearchString(tx.date).includes(s) ||
+                normalizeSearchString(tx._typeStr).includes(s) ||
+                normalizeSearchString(tx._groupStr).includes(s) ||
+                normalizeSearchString(tx._purposeStr).includes(s) ||
+                normalizeSearchString(tx._counterpartyStr).includes(s) ||
+                normalizeSearchString(tx.comment).includes(s) ||
+                normalizeSearchString(tx._amountStr).includes(s) ||
+                normalizeSearchString(String(tx.amount)).includes(s)
             );
         }
 
@@ -1161,12 +1242,12 @@ async function renderTransactions() {
         unpostedBank = unpostedBank.filter(p => p.operation_date >= state.startDate && p.operation_date <= state.endDate);
         // Apply Search — match against ALL visible fields including formatted amount
         if (state.txSearch) {
-            const s = state.txSearch.toLowerCase();
+            const s = normalizeSearchString(state.txSearch);
             unpostedBank = unpostedBank.filter(p => 
-                (p.operation_date && p.operation_date.includes(s)) ||
-                (p.payer_name && p.payer_name.toLowerCase().includes(s)) ||
-                (p.correspondent_name && p.correspondent_name.toLowerCase().includes(s)) ||
-                (p.purpose && p.purpose.toLowerCase().includes(s))
+                normalizeSearchString(p.operation_date).includes(s) ||
+                normalizeSearchString(p.payer_name).includes(s) ||
+                normalizeSearchString(p.correspondent_name).includes(s) ||
+                normalizeSearchString(p.purpose).includes(s)
             );
         }
 
@@ -1817,6 +1898,16 @@ async function renderCharges() {
                 </table>
             </div>`;
 
+        if (currentUser && currentUser.role === 'resident' && !state.chargesResidentInit) {
+            const now = new Date();
+            const past = new Date();
+            past.setFullYear(now.getFullYear() - 1);
+            state.startDate = past.toISOString().split('T')[0];
+            state.endDate = now.toISOString().split('T')[0];
+            state.chargesResidentInit = true;
+            updateGlobalUI();
+        }
+
         await fetchAndRenderReport();
 
     } catch (err) {
@@ -1872,7 +1963,9 @@ async function fetchAndRenderReport() {
                 apartment: {
                     id: item.apartment_id,
                     number: item.apartment_number,
-                    owner_name: item.owner_name
+                    owner_name: item.owner_name,
+                    area_m2: item.area_m2,
+                    email: item.email
                 },
                 apartment_id: item.apartment_id,
                 summary: {
@@ -1888,32 +1981,99 @@ async function fetchAndRenderReport() {
         });
 
         const months = data[0].monthly_details.map(m => m.period);
-        const isSingleMonth = months.length === 1;
+        const isResident = currentUser && currentUser.role === 'resident';
+        const isSingleMonth = months.length === 1 && !isResident;
+
+        if (isResident) {
+            thead.innerHTML = `
+                <tr>
+                    <th>Місяць</th>
+                    <th class="text-right">Борг на початок</th>
+                    <th class="text-right">Квартплата</th>
+                    <th class="text-right">Ліфт</th>
+                    <th class="text-right">Газ</th>
+                    <th class="text-right">Корегування</th>
+                    <th class="text-right">Нараховано загалом</th>
+                    <th class="text-right">Сплачено</th>
+                    <th class="text-right">Борг на кінець</th>
+                </tr>`;
+            
+            let html = '';
+            const mdArray = data[0].monthly_details;
+            const sum = data[0].summary;
+            const apt = data[0].apartment;
+            let maint = 0, lift = 0, gas = 0, adj = 0;
+            
+            const resInfo = document.getElementById('resident-info-display');
+            if (resInfo && apt) {
+                resInfo.innerHTML = `
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 3px">${apt.owner_name || 'Власник не вказаний'}</div>
+                    <div>Площа: ${apt.area_m2 || '—'} м²</div>
+                    <div>Email: ${apt.email || currentUser.email || '—'}</div>
+                `;
+                resInfo.style.display = 'block';
+            }
+            
+            mdArray.forEach(md => {
+                maint += md.maintenance;
+                lift += md.lift;
+                gas += md.gas;
+                adj += md.adjustment;
+                
+                html += `
+                <tr>
+                    <td>${formatPeriod(md.period)}</td>
+                    <td class="text-right ${md.start_balance < 0 ? 'color-danger' : ''}">${formatCurrency(md.start_balance)}</td>
+                    <td class="text-right">${formatCurrency(md.maintenance)}</td>
+                    <td class="text-right">${formatCurrency(md.lift)}</td>
+                    <td class="text-right">${formatCurrency(md.gas)}</td>
+                    <td class="text-right">${formatCurrency(md.adjustment)}</td>
+                    <td class="text-right">${formatCurrency(md.total_charged)}</td>
+                    <td class="text-right color-success">${formatCurrency(md.paid)}</td>
+                    <td class="text-right ${md.end_balance < 0 ? 'color-danger' : ''}">${formatCurrency(md.end_balance)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+
+            document.getElementById('report-footer').innerHTML = `
+                <tr style="font-weight: 700; background: rgba(255,255,255,0.08)">
+                    <td>ЗАГАЛОМ:</td>
+                    <td class="text-right ${sum.start_balance < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(sum.start_balance)} ₴</td>
+                    <td class="text-right">${formatCurrency(maint)} ₴</td>
+                    <td class="text-right">${formatCurrency(lift)} ₴</td>
+                    <td class="text-right">${formatCurrency(gas)} ₴</td>
+                    <td class="text-right">${formatCurrency(adj)} ₴</td>
+                    <td class="text-right">${formatCurrency(sum.total_charged)} ₴</td>
+                    <td class="text-right color-success">${formatCurrency(sum.total_paid)} ₴</td>
+                    <td class="text-right ${sum.end_balance < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(sum.end_balance)} ₴</td>
+                </tr>`;
+            return;
+        }
 
         if (isSingleMonth) {
             thead.innerHTML = `
                 <tr>
                     <th>№ кв.</th>
                     <th>П.І.Б.</th>
-                    <th class="text-right">Поч. борг</th>
-                    <th class="text-right">Утримання</th>
+                    <th class="text-right">Борг на початок</th>
+                    <th class="text-right">Квартплата</th>
                     <th class="text-right">Ліфт</th>
                     <th class="text-right">Газ</th>
-                    <th class="text-right">Корегув.</th>
-                    <th class="text-right">Нараховано</th>
+                    <th class="text-right">Корегування</th>
+                    <th class="text-right">Нараховано загалом</th>
                     <th class="text-right">Сплачено</th>
-                    <th class="text-right">Кінц. борг</th>
+                    <th class="text-right">Борг на кінець</th>
                 </tr>`;
         } else {
             thead.innerHTML = `
                 <tr>
                     <th>№ кв.</th>
                     <th>П.І.Б.</th>
-                    <th class="text-right">Поч. борг<br><small>(${formatPeriod(months[0])})</small></th>
-                    <th class="text-right">Нараховано<br><small>(За період)</small></th>
+                    <th class="text-right">Борг на початок<br><small>(${formatPeriod(months[0])})</small></th>
+                    <th class="text-right">Нараховано загалом<br><small>(За період)</small></th>
                     <th class="text-right">Сплачено<br><small>(За період)</small></th>
-                    <th class="text-right">Кінц. борг<br><small>(${formatPeriod(months[months.length-1])})</small></th>
-                    <th>Details Breakdown</th>
+                    <th class="text-right">Борг на кінець<br><small>(${formatPeriod(months[months.length-1])})</small></th>
+                    <th>Деталізація</th>
                 </tr>`;
         }
 
@@ -1949,7 +2109,7 @@ async function fetchAndRenderReport() {
                     </tr>`;
             } else {
                 html += `
-                    <tr>
+                    <tr class="${(currentUser && currentUser.role === 'resident') ? 'expanded' : ''}">
                         <td><b>${item.apartment.number}</b></td>
                         <td><div class="truncate-text" style="max-width:120px" title="${item.apartment.owner_name}">${item.apartment.owner_name || '—'}</div></td>
                         <td class="text-right ${sum.start_balance < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(sum.start_balance)}</td>
@@ -1958,24 +2118,24 @@ async function fetchAndRenderReport() {
                         <td class="text-right ${sum.end_balance < 0 ? 'color-danger' : 'color-success'}"><b>${formatCurrency(sum.end_balance)}</b></td>
                         <td class="text-center">
                             <button class="btn btn-secondary btn-sm" onclick="toggleApartmentHistory(this.closest('tr'), ${item.apartment.id})">
-                                <i class="fas fa-chevron-down"></i>
+                                <i class="fas fa-chevron-${(currentUser && currentUser.role === 'resident') ? 'up' : 'down'}"></i>
                             </button>
                         </td>
                     </tr>
-                    <tr id="history-${item.apartment.id}" class="history-row" style="display:none">
+                    <tr id="history-${item.apartment.id}" class="history-row" style="display:${(currentUser && currentUser.role === 'resident') ? 'table-row' : 'none'}">
                         <td colspan="7" style="padding: 0; background: rgba(0,0,0,0.2)">
                             <table style="width:100%; font-size:0.85rem; margin:0">
                                 <thead>
                                     <tr style="background:transparent; border-bottom:1px solid rgba(255,255,255,0.1)">
-                                        <th>Month</th>
-                                        <th class="text-right">Поч. борг</th>
-                                        <th class="text-right">Утрим.</th>
+                                        <th>Місяць</th>
+                                        <th class="text-right">Борг на початок</th>
+                                        <th class="text-right">Квартплата</th>
                                         <th class="text-right">Ліфт</th>
                                         <th class="text-right">Газ</th>
-                                        <th class="text-right">Корег.</th>
-                                        <th class="text-right">Нарах.</th>
+                                        <th class="text-right">Корегування</th>
+                                        <th class="text-right">Нараховано загалом</th>
                                         <th class="text-right">Сплачено</th>
-                                        <th class="text-right">Кінц. борг</th>
+                                        <th class="text-right">Борг на кінець</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2041,8 +2201,8 @@ function toggleMonthExpand(month) {
 
 function formatPeriod(p) {
     const [y, m] = p.split('-');
-    const months = ['січ', 'лют', 'бер', 'квіт', 'трав', 'черв', 'лип', 'серп', 'вер', 'жовт', 'лист', 'груд'];
-    return `${months[parseInt(m) - 1]}., ${y}`;
+    const months = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+    return `${months[parseInt(m) - 1]}-${y.substring(2)}`;
 }
 
 function toggleApartmentHistory(row, aptId) {
@@ -2575,6 +2735,24 @@ async function renderSettings() {
                     <p style="margin: 0; color: var(--text-secondary); text-align: center;">Перетягніть файл credentials.json сюди або <b>натисніть</b></p>
                     <input type="file" id="gmail-creds-upload" accept=".json" style="display:none" onchange="uploadGmailCreds(event)">
                 </div>
+                <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
+                    <a href="javascript:void(0)" onclick="toggleGmailHelp()" style="font-size: 0.85rem; color: var(--primary-color); text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        <i class="fas fa-question-circle"></i> Інструкція: Що робити, якщо авторизація злітає?
+                    </a>
+                    <div id="gmail-help-content" style="display: none; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 4px;">
+                        <p style="margin: 0 0 0.5rem 0;"><b>1. Чому злітає авторизація?</b><br>
+                        Якщо ваш проєкт Google Cloud перебуває в режимі тестування (Testing), Google анулює токен оновлення кожні <b>7 днів</b>.</p>
+                        
+                        <p style="margin: 0 0 0.5rem 0;"><b>2. Як відновити авторизацію?</b><br>
+                        Натисніть кнопку <i>"Скинути токен / Змінити акаунт"</i> вище, а потім запустіть Синхронізацію Gmail на головній сторінці. У браузері відкриється вікно Google для входу. Увійдіть через <b>zapolyarie102@gmail.com</b> (або інший адмін-акаунт).</p>
+                        
+                        <p style="margin: 0 0 0.5rem 0;"><b>3. Що робити, якщо видалився credentials.json?</b><br>
+                        1. Зайдіть у <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--primary-color)">Google Cloud Console</a>.<br>
+                        2. Перейдіть у розділ <b>APIs & Services</b> → <b>Credentials</b>.<br>
+                        3. Знайдіть свій клієнт OAuth 2.0 (тип Desktop app) та завантажте його JSON-файл.<br>
+                        4. Перетягніть цей файл у зону вище або натисніть на неї для завантаження.</p>
+                    </div>
+                </div>
             </div>`
     };
 
@@ -2783,20 +2961,54 @@ async function loadGmailStatus() {
             ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Авторизовано' 
             : '<i class="fas fa-times-circle" style="color: var(--warning)"></i> Очікує авторизації';
             
+        let resetBtnHtml = '';
+        if (status.token_exists) {
+            resetBtnHtml = `
+                <div style="margin-top: 0.75rem; text-align: right;">
+                    <button class="btn btn-secondary btn-sm" onclick="resetGmailToken()" style="color: var(--danger); border-color: rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.05);">
+                        <i class="fas fa-sign-out-alt"></i> Скинути токен / Змінити акаунт
+                    </button>
+                </div>
+            `;
+        }
+
         document.getElementById('gmail-status').innerHTML = `
             <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; padding-bottom:0.5rem; border-bottom:1px solid rgba(255,255,255,0.1)">
                 <span>Ключ (credentials.json):</span>
                 <b>${credsIcon}</b>
             </div>
-            <div style="display:flex; justify-content:space-between;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span>Токен (token.json):</span>
                 <b>${tokenIcon}</b>
             </div>
+            ${resetBtnHtml}
         `;
     } catch (e) {
         document.getElementById('gmail-status').innerHTML = '<span class="color-danger">Помилка завантаження статусу</span>';
     }
 }
+
+window.resetGmailToken = async function() {
+    if (!confirm('Ви впевнені, що хочете скинути поточний Gmail токен? Це дозволить авторизувати інший акаунт.')) return;
+    try {
+        const res = await fetch(`${API_BASE}/bank/gmail-reset`, { method: 'POST' });
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || 'Невідома помилка');
+        }
+        alert('Токен успішно скинуто! При наступному запуску синхронізації буде запропоновано увійти у потрібний Google-акаунт.');
+        await loadGmailStatus();
+    } catch (err) {
+        alert('Помилка при скиданні токена: ' + err.message);
+    }
+};
+
+window.toggleGmailHelp = function() {
+    const el = document.getElementById('gmail-help-content');
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+};
 
 window.uploadGmailCreds = async function(event) {
     const file = event.target.files[0];
@@ -3198,9 +3410,10 @@ async function editApartment(id) {
     modalTitle.innerText = `Дія: Apartment № ${apt.number}`;
     const liftStatusText = apt.has_lift_exemption ? '<span class="color-danger">Без ліфта</span>' : '<span class="color-success">З ліфтом</span>';
     modalBody.innerHTML = `
-        <div style="margin-bottom: 1rem">
-            <p><b>Owner:</b> ${apt.owner_name || '—'}</p>
+        <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+            <p><b>Власник:</b> ${apt.owner_name || '—'}</p>
             <p><b>Площа:</b> ${apt.area_m2} м²</p>
+
             <p style="display:flex; justify-content:space-between; align-items:center;">
                 <span><b>Ліфт:</b> ${liftStatusText}</span>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="toggleLiftStatus(${apt.id})">
@@ -3209,10 +3422,13 @@ async function editApartment(id) {
             </p>
         </div>
         <div class="form-group">
+            <label>Email мешканця (для доступу)</label>
+            <input type="email" id="apt-email-input" class="form-control" style="width:100%; margin-bottom: 1.5rem" value="${apt.email || ''}" placeholder="Введіть email">
+
             <label>Період застосування (місяць)</label>
             <input type="month" id="action-period" class="form-control" style="width:100%; margin-bottom: 1rem" value="${state.startDate.substring(0, 7)}" onclick="this.showPicker()">
 
-            <label>Type дії</label>
+            <label>Тип дії</label>
             <select id="action-type" class="form-control" style="width:100%; margin-bottom: 1rem">
                 <option value="adjustment">Корегування (Фінансове)</option>
                 <option value="owner_change">Зміна власника</option>
@@ -3220,7 +3436,7 @@ async function editApartment(id) {
             </select>
 
             <div id="fields-adjustment">
-                <label>Amount (+ або −)</label>
+                <label>Сума (+ або −)</label>
                 <input type="number" step="0.01" id="adj-amount" class="form-control" style="width:100%;margin-bottom:1rem" placeholder="0.00">
                 <label>Причина</label>
                 <input type="text" id="adj-desc" class="form-control" style="width:100%">
@@ -3251,39 +3467,68 @@ async function editApartment(id) {
         submitBtn.onclick = async () => {
             const type = typeSelect.value;
             const period = document.getElementById('action-period').value;
+            const newEmail = document.getElementById('apt-email-input').value.trim();
+            const originalEmail = apt.email || '';
             let payload = { apartment_id: id, type, period };
+            let hasAction = false;
 
             if (type === 'adjustment') {
-                const amount = parseFloat(document.getElementById('adj-amount').value);
-                if (isNaN(amount)) return alert('Введіть суму');
-                payload.amount = amount;
-                payload.description = document.getElementById('adj-desc').value;
+                const amount = document.getElementById('adj-amount').value;
+                if (amount !== '') {
+                    payload.amount = parseFloat(amount);
+                    if (isNaN(payload.amount)) return alert('Введіть суму');
+                    payload.description = document.getElementById('adj-desc').value;
+                    hasAction = true;
+                }
             } else if (type === 'owner_change') {
                 const val = document.getElementById('new-owner').value.trim();
-                if (!val) return alert('Введіть ім\'я');
-                payload.new_value = val;
+                if (val !== '') {
+                    payload.new_value = val;
+                    hasAction = true;
+                }
             } else if (type === 'area_change') {
                 const val = document.getElementById('new-area').value;
-                if (!val) return alert('Введіть площу');
-                payload.new_value = val;
+                if (val !== '') {
+                    payload.new_value = val;
+                    hasAction = true;
+                }
             }
 
-            try {
-                const res = await fetch(`${API_BASE}/apartments/${id}/logs`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!res.ok) throw new Error('Помилка сервера');
-
-                closeModal();
-                state.needsRecalculation = true;
-                updateGlobalUI();
-                await fetchApartments();
-                await renderSettings();
-            } catch (err) {
-                alert('Помилка: ' + err.message);
+            if (!hasAction && newEmail === originalEmail) {
+                return closeModal();
             }
+
+            if (newEmail !== originalEmail) {
+                try {
+                    const res = await fetch(`${API_BASE}/apartments/${id}/email`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: newEmail || null })
+                    });
+                    if (!res.ok) throw new Error('Помилка збереження email');
+                } catch (err) {
+                    return alert('Помилка: ' + err.message);
+                }
+            }
+
+            if (hasAction) {
+                try {
+                    const res = await fetch(`${API_BASE}/apartments/${id}/logs`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error('Помилка збереження логу');
+                    state.needsRecalculation = true;
+                } catch (err) {
+                    return alert('Помилка: ' + err.message);
+                }
+            }
+
+            closeModal();
+            if (state.needsRecalculation) updateGlobalUI();
+            await fetchApartments();
+            await renderSettings();
         };
     }
 }
@@ -3301,6 +3546,23 @@ window.toggleLiftStatus = async function(id) {
         alert('Помилка: ' + err.message);
     }
 };
+
+window.saveApartmentEmail = async function(id) {
+    const email = document.getElementById('apt-email-input').value.trim();
+    try {
+        const res = await fetch(`${API_BASE}/apartments/${id}/email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email || null })
+        });
+        if (!res.ok) throw new Error('Помилка збереження email');
+        await fetchApartments();
+        await renderSettings();
+        editApartment(id);
+    } catch (err) {
+        alert('Помилка: ' + err.message);
+    }
+}
 
 
 
@@ -3660,7 +3922,23 @@ window.updateScenariosCharts = async function() {
     
     const monthNamesUa = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const firstData = window.scenariosData[loaded[0]].data;
-    const forecastLabels = firstData.map(f => `${monthNamesUa[parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}`);
+    
+    const endY = parseInt(state.endDate.split('-')[0]);
+    const endM = parseInt(state.endDate.split('-')[1]);
+    
+    const filteredIndices = [];
+    firstData.forEach((f, i) => {
+        const fy = parseInt(f.month.split('-')[0]);
+        const fm = parseInt(f.month.split('-')[1]);
+        if (fy < endY || (fy === endY && fm <= endM)) {
+            filteredIndices.push(i);
+        }
+    });
+
+    const forecastLabels = filteredIndices.map(i => {
+        const f = firstData[i];
+        return `${monthNamesUa[parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}`;
+    });
     
     // Build combined labels: actuals + forecast
     const actuals = window.dashboardActuals || { labels: [], balance: [], inflow: [], expenses: [] };
@@ -3715,7 +3993,7 @@ window.updateScenariosCharts = async function() {
         
         // Bridge from last actual balance into forecast
         const bridgeVal = actualCount > 0 ? actuals.balance[actualCount - 1] : null;
-        const forecastValues = d.data.map(f => f.cumulative);
+        const forecastValues = filteredIndices.map(idx_f => d.data[idx_f].cumulative);
         const scenarioData = actualCount > 0
             ? [...new Array(actualCount - 1).fill(null), bridgeVal, ...forecastValues]
             : forecastValues;
@@ -3811,7 +4089,7 @@ window.updateScenariosCharts = async function() {
                                     <div class="editable-pill" style="justify-content: center;">
                                         <input type="number" step="0.1" value="${tariffVal.toFixed(1)}" 
                                                onchange="window.updateScenarioTariff(${idx}, this.value)" 
-                                               style="width: 45px;">
+                                               style="width: 45px;" ${(currentUser && currentUser.role === 'resident') ? 'disabled' : ''}>
                                         <span class="pill-suffix">грн</span>
                                     </div>
                                 </th>
@@ -3835,14 +4113,14 @@ window.updateScenariosCharts = async function() {
                             <div class="editable-pill" style="justify-content: center;">
                                 <input type="month" class="no-calendar-icon" value="${act.planned_month}" 
                                        onchange="window.updateActivityMonth(${act.id}, this.value)"
-                                       style="width: 140px; text-align: center; font-size: 0.8rem;">
+                                       style="width: 140px; text-align: center; font-size: 0.8rem;" ${(currentUser && currentUser.role === 'resident') ? 'disabled' : ''}>
                             </div>
                         </td>
                         <td style="padding: 0.5rem; text-align: right; vertical-align: middle;">
                             <div class="editable-pill" style="justify-content: flex-end;">
                                 <input type="number" step="100" value="${act.planned_amount}" 
                                        onchange="window.updateActivityAmount(${act.id}, this.value)"
-                                       style="width: 75px; text-align: right; font-size: 0.8rem;">
+                                       style="width: 75px; text-align: right; font-size: 0.8rem;" ${(currentUser && currentUser.role === 'resident') ? 'disabled' : ''}>
                                 <span class="pill-suffix">₴</span>
                             </div>
                         </td>
@@ -3852,21 +4130,25 @@ window.updateScenariosCharts = async function() {
                 const isExcluded = window.scenarioExcludedActivities[idx] && window.scenarioExcludedActivities[idx].has(act.id);
                 const isIncluded = !isExcluded;
                 
-                html += `<td style="padding: 0.5rem; text-align: center; cursor: pointer; vertical-align: middle;" onclick="window.toggleScenarioActivity(${idx}, ${act.id})" title="Натисніть щоб увімкнути/вимкнути">
+                html += `<td style="padding: 0.5rem; text-align: center; cursor: ${(currentUser && currentUser.role === 'resident') ? 'default' : 'pointer'}; vertical-align: middle;" ${(currentUser && currentUser.role === 'resident') ? '' : `onclick="window.toggleScenarioActivity(${idx}, ${act.id})"`} title="${(currentUser && currentUser.role === 'resident') ? '' : 'Натисніть щоб увімкнути/вимкнути'}">
                     ${isIncluded ? 
                         `<i class="fas fa-check-circle" style="font-size: 1.3rem; color: var(--success); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>` : 
                         `<i class="fas fa-times-circle" style="font-size: 1.3rem; color: var(--danger); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'"></i>`}
                 </td>`;
             }
             
-            html += `<td style="padding: 0.5rem; text-align: center; vertical-align: middle;">
-                        <button class="btn btn-sm" onclick="window.deleteActivityGlobal(${act.id})" 
-                                style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; padding: 4px 8px; cursor: pointer; transition: all 0.2s;"
-                                onmouseover="this.style.background='var(--danger)'; this.style.color='white'"
-                                onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'; this.style.color='var(--danger)'">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                     </td>`;
+            if (!(currentUser && currentUser.role === 'resident')) {
+                html += `<td style="padding: 0.5rem; text-align: center; vertical-align: middle;">
+                            <button class="btn btn-sm" onclick="window.deleteActivityGlobal(${act.id})" 
+                                    style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; padding: 4px 8px; cursor: pointer; transition: all 0.2s;"
+                                    onmouseover="this.style.background='var(--danger)'; this.style.color='white'"
+                                    onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'; this.style.color='var(--danger)'">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                         </td>`;
+            } else {
+                html += `<td></td>`;
+            }
             
             html += `</tr>`;
         }

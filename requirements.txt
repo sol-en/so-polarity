@@ -7,3 +7,5 @@ openpyxl
 xlrd
 rapidfuzz
 python-dotenv
+google-auth
+PyJWT

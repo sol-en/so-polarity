@@ -371,6 +371,19 @@ def get_gmail_status():
         "token_exists": os.path.exists(token_path)
     }
 
+@router.post("/gmail-reset")
+def reset_gmail_token():
+    """Delete token.json to trigger re-authorization on next sync."""
+    token_path = os.getenv('GMAIL_TOKEN', 'token.json')
+    if os.path.exists(token_path):
+        try:
+            os.remove(token_path)
+            return {"status": "ok", "message": "Token reset successfully."}
+        except Exception as e:
+            raise HTTPException(500, f"Failed to delete token file: {e}")
+    return {"status": "ok", "message": "No active token found."}
+
+
 # ── Payment list & details ───────────────────────────────────────────────────
 
 @router.get("/payments")

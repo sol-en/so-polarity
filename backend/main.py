@@ -2,8 +2,13 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+from dotenv import load_dotenv
+
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(env_path)
+
 from .database import engine, Base
-from .routers import apartments, transactions, categories, tariffs, charges, dashboard, contractors, forecast
+from .routers import apartments, transactions, categories, tariffs, charges, dashboard, contractors, forecast, auth
 from .bank_integration.router import router as bank_router
 from . import bank_models  # Ensure bank integration tables are created
 
@@ -15,6 +20,7 @@ async def startup():
     Base.metadata.create_all(bind=engine)
 
 # Include API routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(apartments.router, prefix="/api/apartments", tags=["Apartments"])
 app.include_router(tariffs.router, prefix="/api/tariffs", tags=["Tariffs"])
 app.include_router(categories.router, prefix="/api/categories", tags=["Categories"])

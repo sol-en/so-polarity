@@ -9,3 +9,7 @@ credentials.json
 token.json
 scratch*.py
 *.csv
+.env
+get-pip.py
+
+

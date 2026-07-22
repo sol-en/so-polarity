@@ -10,10 +10,12 @@ router = APIRouter()
 @router.get("/", response_model=List[schemas.Apartment])
 def get_apartments(db: Session = Depends(get_db)):
     apartments = db.query(models.Apartment).all()
+    user_access_map = {ua.apartment_id: ua.email for ua in db.query(models.UserAccess).filter(models.UserAccess.role == 'resident').all()}
     for apt in apartments:
         total_charges = db.query(func.sum(models.Charge.total)).filter(models.Charge.apartment_id == apt.id).scalar() or 0.0
         total_payments = db.query(func.sum(models.Transaction.amount)).filter(models.Transaction.apartment_id == apt.id).scalar() or 0.0
         apt.current_balance = apt.initial_balance - total_charges + total_payments
+        apt.email = user_access_map.get(apt.id)
     return apartments
 
 @router.get("/{apt_id}", response_model=schemas.Apartment)
@@ -25,6 +27,8 @@ def get_apartment(apt_id: int, db: Session = Depends(get_db)):
     total_charges = db.query(func.sum(models.Charge.total)).filter(models.Charge.apartment_id == apt.id).scalar() or 0.0
     total_payments = db.query(func.sum(models.Transaction.amount)).filter(models.Transaction.apartment_id == apt.id).scalar() or 0.0
     apt.current_balance = apt.initial_balance - total_charges + total_payments
+    ua = db.query(models.UserAccess).filter(models.UserAccess.apartment_id == apt.id, models.UserAccess.role == 'resident').first()
+    apt.email = ua.email if ua else None
     return apt
 
 @router.post("/", response_model=schemas.Apartment)
@@ -71,3 +75,28 @@ def toggle_lift(apt_id: int, db: Session = Depends(get_db)):
     apt.has_lift_exemption = not apt.has_lift_exemption
     db.commit()
     return {"has_lift": not apt.has_lift_exemption}
+
+from pydantic import BaseModel
+class EmailUpdate(BaseModel):
+    email: str | None
+
+@router.post("/{apt_id}/email")
+def update_email(apt_id: int, req: EmailUpdate, db: Session = Depends(get_db)):
+    apt = db.query(models.Apartment).filter(models.Apartment.id == apt_id).first()
+    if not apt:
+        raise HTTPException(status_code=404, detail="Apartment not found")
+    
+    ua = db.query(models.UserAccess).filter(models.UserAccess.apartment_id == apt_id, models.UserAccess.role == 'resident').first()
+    if req.email:
+        if ua:
+            ua.email = req.email
+        else:
+            new_ua = models.UserAccess(email=req.email, role='resident', apartment_id=apt_id)
+            db.add(new_ua)
+    else:
+        if ua:
+            db.delete(ua)
+            
+    db.commit()
+    return {"status": "ok"}
+

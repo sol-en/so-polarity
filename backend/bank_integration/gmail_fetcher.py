@@ -32,12 +32,23 @@ def get_gmail_service():
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                logger.warning(f"Failed to refresh Gmail token: {e}. Removing invalid token and re-authenticating...")
+                if os.path.exists(token_path):
+                    try:
+                        os.remove(token_path)
+                    except Exception as rm_err:
+                        logger.warning(f"Could not remove invalid token file: {rm_err}")
+                creds = None
+
+        if not creds:
             if not os.path.exists(creds_path):
                 raise FileNotFoundError(f"Credentials file {creds_path} not found.")
             flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
             creds = flow.run_local_server(port=0)
+            
         with open(token_path, 'w') as token:
             token.write(creds.to_json())
 

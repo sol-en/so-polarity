@@ -84,9 +84,20 @@ def calculate_charges(req: schemas.CalculationRequest, db: Session = Depends(get
     apartments = db.query(models.Apartment).all()
     return {"message": f"Charges calculated for {len(apartments)} apartments for period {req.period}"}
 
+from ..auth_utils import get_current_user, CurrentUser
+
 @router.post("/report", response_model=List[schemas.ApartmentReport])
-def get_charges_report(req: schemas.ReportRequest, db: Session = Depends(get_db)):
-    apartments = db.query(models.Apartment).all()
+def get_charges_report(
+    req: schemas.ReportRequest, 
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    print("DEBUG REPORT REQ:", req.start_period, req.end_period)
+    if current_user.role == 'resident':
+        apartments = db.query(models.Apartment).filter(models.Apartment.id == current_user.apartment_id).all()
+    else:
+        apartments = db.query(models.Apartment).all()
+
     
     results = []
     for apt in apartments:
@@ -153,6 +164,8 @@ def get_charges_report(req: schemas.ReportRequest, db: Session = Depends(get_db)
             apartment_id=apt.id,
             apartment_number=apt.number,
             owner_name=apt.owner_name,
+            area_m2=apt.area_m2,
+            email=None,
             start_balance=start_balance,
             end_balance=end_balance,
             total_charges=total_charges,
