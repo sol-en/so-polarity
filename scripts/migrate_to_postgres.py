@@ -22,7 +22,9 @@ from backend import models, bank_models  # реєстрація всіх мод�
 
 def migrate(sqlite_path: str, target_db_url: str):
     if target_db_url.startswith("postgres://"):
-        target_db_url = target_db_url.replace("postgres://", "postgresql://", 1)
+        target_db_url = target_db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif target_db_url.startswith("postgresql://") and not target_db_url.startswith("postgresql+"):
+        target_db_url = target_db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
     print(f"📦 Джерело SQLite: {sqlite_path}")
     print(f"🚀 Цільова БД PostgreSQL: {target_db_url.split('@')[-1] if '@' in target_db_url else 'target'}")
