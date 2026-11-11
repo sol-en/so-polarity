@@ -1,6 +1,6 @@
 fastapi
 sqlalchemy
-uvicorn
+uvicorn[standard]
 python-multipart
 pandas
 openpyxl
@@ -8,6 +8,11 @@ xlrd
 rapidfuzz
 python-dotenv
 google-auth
+google-auth-oauthlib
+google-api-python-client
 PyJWT
+cryptography
+requests
+python-dateutil
 psycopg2-binary
 gunicorn
