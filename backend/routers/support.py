@@ -17,8 +17,8 @@ router = APIRouter()
 JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-key-change-in-production")
 ALGORITHM = "HS256"
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "9211562608:AAEUt2e4X4W2UXVyWDESTcr1poziCm4_GrU")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "-5432554901")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 def get_telegram_chats():
     token = os.environ.get("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN)
