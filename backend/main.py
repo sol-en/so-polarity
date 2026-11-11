@@ -14,10 +14,23 @@ from . import bank_models  # Ensure bank integration tables are created
 
 app = FastAPI(title="ЖБК Accounting API", version="0.1.0")
 
-# Create tables on startup
+# Create tables on startup and ensure default admins
 @app.on_event("startup")
 async def startup():
     Base.metadata.create_all(bind=engine)
+    try:
+        from .database import SessionLocal
+        from . import models
+        db = SessionLocal()
+        default_admins = ["serdiuk.elena@gmail.com", "zapolyarie102@gmail.com"]
+        for email in default_admins:
+            existing = db.query(models.UserAccess).filter(models.UserAccess.email == email).first()
+            if not existing:
+                db.add(models.UserAccess(email=email, role="admin", apartment_id=None))
+        db.commit()
+        db.close()
+    except Exception as e:
+        print("Startup seed error:", e)
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
