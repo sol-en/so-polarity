@@ -11,5 +11,5 @@ scratch*.py
 *.csv
 .env
 get-pip.py
-
-
+cloudflared
+.DS_Store

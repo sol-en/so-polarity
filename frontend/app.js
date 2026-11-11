@@ -20,6 +20,11 @@ const API_BASE = '/api';
 
 const today = new Date();
 const currentYear = today.getFullYear();
+const defaultEndDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+const defaultStartDateObj = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+const fmtDateISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const defaultStartDateStr = fmtDateISO(defaultStartDateObj);
+const defaultEndDateStr = fmtDateISO(defaultEndDateObj);
 const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
 const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
@@ -27,8 +32,8 @@ const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getM
 let state = {
     currentPage: 'dashboard',
     apartments: [],
-    startDate: `${currentYear}-01-01`,
-    endDate: `${currentYear}-12-31`,
+    startDate: defaultStartDateStr,
+    endDate: defaultEndDateStr,
     visitedDashboard: false,
     visitedOther: false,
     needsRecalculation: false,
@@ -53,6 +58,29 @@ function formatCurrency(val) {
     return Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
+function getChartThemeColors() {
+    const isLight = document.body.classList.contains('light-theme');
+    const textColor = isLight ? '#334155' : '#f1f5f9';
+    if (typeof Chart !== 'undefined') {
+        Chart.defaults.color = textColor;
+    }
+    return {
+        isLight,
+        textColor: textColor,
+        textMuted: isLight ? '#64748b' : '#cbd5e1',
+        gridColor: isLight ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.12)',
+        zeroLineColor: isLight ? 'rgba(15, 23, 42, 0.35)' : 'rgba(255, 255, 255, 0.45)',
+        cardBg: isLight ? '#ffffff' : '#1e293b',
+        sliceBorder: isLight ? '#ffffff' : '#1e293b',
+        debtorColors: isLight
+            ? ['#ef4444', '#f97316', '#f59e0b', '#e11d48', '#8b5cf6', '#6366f1', '#0ea5e9', '#0d9488', '#d946ef', '#64748b', '#cbd5e1']
+            : ['#f87171', '#fb923c', '#fbbf24', '#fb7185', '#a78bfa', '#818cf8', '#38bdf8', '#2dd4bf', '#e879f9', '#94a3b8', '#64748b'],
+        expenseColors: isLight
+            ? ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#94a3b8']
+            : ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee', '#fb923c', '#2dd4bf', '#a3e635', '#94a3b8']
+    };
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const contentArea = document.getElementById('content-area');
 const pageTitle = document.getElementById('page-title');
@@ -63,8 +91,18 @@ const modalBody = document.getElementById('modal-body');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore theme preference
+    if (localStorage.getItem('zhbk_theme') === 'light') {
+        document.body.classList.add('light-theme');
+        const themeIcon = document.querySelector('#theme-toggle i');
+        if (themeIcon) {
+            themeIcon.classList.remove('fa-sun');
+            themeIcon.classList.add('fa-moon');
+        }
+    }
     initNavigation();
-    loadPage('dashboard');
+    const initialPage = (currentUser && currentUser.role === 'resident') ? 'charges' : 'reports';
+    loadPage(initialPage);
     document.querySelectorAll('.close-modal').forEach(btn => { btn.onclick = closeModal; });
 
     const globalRecalcBtn = document.getElementById('btn-recalculate');
@@ -79,20 +117,31 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function formatDateUa(dateStr) {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
-        return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + d.getFullYear();
+        if (dateStr.includes('-')) {
+            const parts = dateStr.split('-');
+            if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+        return dateStr;
     }
     
     function updatePeriodText(start, end) {
         if(textSpan) textSpan.innerText = `${formatDateUa(start)} - ${formatDateUa(end)}`;
     }
+    window.updatePeriodText = updatePeriodText;
     
     updatePeriodText(state.startDate, state.endDate);
     
     if (btn && dropdown) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const isHidden = dropdown.style.display === 'none';
+            dropdown.style.display = isHidden ? 'block' : 'none';
+            if (isHidden && window.globalPicker && state.startDate && state.endDate) {
+                try {
+                    window.globalPicker.setDateRange(state.startDate, state.endDate);
+                    window.globalPicker.gotoDate(state.startDate);
+                } catch(e) {}
+            }
         });
         
         document.addEventListener('click', (e) => {
@@ -102,13 +151,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        const fmtLocal = (d) => d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+
         const applyPeriod = (start, end) => {
-            if (state.startDate !== start || state.endDate !== end) {
-                state.startDate = start;
-                state.endDate = end;
-                updatePeriodText(start, end);
-                loadPage(state.currentPage);
+            state.startDate = start;
+            state.endDate = end;
+            updatePeriodText(start, end);
+            if (window.globalPicker) {
+                try {
+                    window.globalPicker.setDateRange(start, end);
+                    window.globalPicker.gotoDate(start);
+                } catch(e) {
+                    console.error('Error updating globalPicker:', e);
+                }
             }
+            loadPage(state.currentPage);
             dropdown.style.display = 'none';
             document.querySelectorAll('.period-menu-page').forEach(p => p.style.display = 'none');
             document.getElementById('period-menu-main').style.display = 'block';
@@ -124,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let y = currentYearNum; y >= 2021; y--) {
                 const div = document.createElement('div');
                 div.className = 'period-menu-item';
-                div.innerText = `${y} year`;
+                div.innerText = `${y} рік`;
                 div.onclick = () => applyPeriod(`${y}-01-01`, `${y}-12-31`);
                 yearCont.appendChild(div);
             }
@@ -138,13 +195,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let q = 4; q >= 1; q--) {
                     const div = document.createElement('div');
                     div.className = 'period-menu-item';
-                    div.innerText = `${q === 1 ? 'I' : q === 2 ? 'II' : q === 3 ? 'III' : 'IV'} quarter ${y}`;
+                    div.innerText = `${q === 1 ? 'I' : q === 2 ? 'II' : q === 3 ? 'III' : 'IV'} квартал ${y}`;
                     const mStart = (q - 1) * 3;
                     const mEnd = q * 3;
                     div.onclick = () => {
                         const sd = new Date(y, mStart, 1);
                         const ed = new Date(y, mEnd, 0);
-                        applyPeriod(sd.toISOString().split('T')[0], ed.toISOString().split('T')[0]);
+                        applyPeriod(fmtLocal(sd), fmtLocal(ed));
                     };
                     qCont.appendChild(div);
                 }
@@ -155,17 +212,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthCont = document.getElementById('month-options-container');
         if(monthCont) {
             monthCont.innerHTML = '';
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            for (let m = 0; m < 12; m++) {
-                const div = document.createElement('div');
-                div.className = 'period-menu-item';
-                div.innerText = monthNames[m];
-                div.onclick = () => {
-                    const sd = new Date(currentYearNum, m, 1);
-                    const ed = new Date(currentYearNum, m + 1, 0);
-                    applyPeriod(sd.toISOString().split('T')[0], ed.toISOString().split('T')[0]);
-                };
-                monthCont.appendChild(div);
+            const monthNames = ['Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень', 'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень'];
+            for (let y = currentYearNum; y >= currentYearNum - 1; y--) {
+                for (let m = 0; m < 12; m++) {
+                    const div = document.createElement('div');
+                    div.className = 'period-menu-item';
+                    div.innerText = `${monthNames[m]} ${y}`;
+                    div.onclick = () => {
+                        const sd = new Date(y, m, 1);
+                        const ed = new Date(y, m + 1, 0);
+                        applyPeriod(fmtLocal(sd), fmtLocal(ed));
+                    };
+                    monthCont.appendChild(div);
+                }
             }
         }
         
@@ -188,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             });
-            // Litepicker requires an element. If inlineMode is true, it renders inside the parent element or the element itself.
         }
         
         const btnApply = document.getElementById('custom-period-apply');
@@ -243,7 +301,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const submenu = e.target.closest('.has-submenu');
             if (submenu) {
                 document.getElementById('period-menu-main').style.display = 'none';
-                document.getElementById(submenu.getAttribute('data-target')).style.display = 'block';
+                const targetId = submenu.getAttribute('data-target');
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) targetEl.style.display = 'block';
+                
+                if (targetId === 'period-menu-custom' && window.globalPicker) {
+                    if (state.startDate && state.endDate) {
+                        try {
+                            window.globalPicker.setDateRange(state.startDate, state.endDate);
+                            window.globalPicker.gotoDate(state.startDate);
+                        } catch(e) {
+                            console.error('Error syncing Litepicker:', e);
+                        }
+                    }
+                }
             }
             
             const backBtn = e.target.closest('.period-menu-header[data-back]');
@@ -283,40 +354,50 @@ async function loadPage(page) {
         }
     }
 
-    if (page === 'dashboard' && !state.visitedDashboard) {
-        state.startDate = `${currentYear}-01-01`;
-        state.endDate = `${currentYear}-12-31`;
-        state.visitedDashboard = true;
-    } else if (page !== 'dashboard' && !state.visitedOther) {
-        const pYear = prevMonthDate.getFullYear();
-        const pMonth = prevMonthDate.getMonth();
-        const d1 = new Date(pYear, pMonth, 1);
-        const d2 = new Date(pYear, pMonth + 1, 0);
-        state.startDate = `${pYear}-${String(pMonth + 1).padStart(2, '0')}-01`;
-        state.endDate = `${pYear}-${String(pMonth + 1).padStart(2, '0')}-${String(d2.getDate()).padStart(2, '0')}`;
-        state.visitedOther = true;
+    if (!state.startDate || !state.endDate) {
+        state.startDate = defaultStartDateStr;
+        state.endDate = defaultEndDateStr;
     }
     
+    if (window.updatePeriodText) {
+        window.updatePeriodText(state.startDate, state.endDate);
+    }
     if (window.globalPicker) {
-        window.globalPicker.setDateRange(state.startDate, state.endDate);
+        try {
+            window.globalPicker.setDateRange(state.startDate, state.endDate);
+        } catch(e) {}
     }
 
     state.currentPage = page;
     contentArea.innerHTML = '<div class="loader">Loading...</div>';
 
+    // Sync sidebar active class
+    navItems.forEach(n => {
+        const p = n.getAttribute('data-page');
+        if (p === page || (page === 'dashboard' && p === 'forecast') || (page === 'forecast' && p === 'forecast')) {
+            n.classList.add('active');
+        } else {
+            n.classList.remove('active');
+        }
+    });
+
     switch (page) {
-        case 'dashboard': await renderDashboard(); break;
+        case 'reports': await renderReports(); break;
+        case 'forecast':
+        case 'dashboard': await renderForecast(); break;
         case 'apartments': 
             loadPage('settings'); 
             break;
         case 'transactions': await renderTransactions(); break;
         case 'charges': await renderCharges(); break;
-        case 'reports': await renderReports(); break;
+        case 'receipts': await renderReceipts(); break;
         case 'settings': await renderSettings(); break;
+        case 'help': await renderHelp(); break;
         default:
             contentArea.innerHTML = `<h2>Сторінка "${page}" ще в розробці</h2>`;
     }
 }
+window.loadPage = loadPage;
 
 // ── Data fetchers ─────────────────────────────────────────────────────────────
 async function fetchApartments() {
@@ -404,7 +485,9 @@ function renderMonthPickerGrid() {
     const yearDisplay = document.getElementById('picker-year-display');
     if(yearDisplay) yearDisplay.innerText = state.pickerYear;
     
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = (window.currentLang === 'en')
+        ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        : ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
     const targetVal = state[state.pickerTargetState] || '';
     
     const html = months.map((m, i) => {
@@ -431,9 +514,9 @@ function showConfirmModal(title, message) {
 
         const modalFooter = document.querySelector('.modal-footer');
         modalFooter.innerHTML = `
-            <button class="btn btn-secondary" id="confirm-no">Ні, відмінити зміни</button>
+            <button class="btn btn-secondary" id="confirm-no">Ні, скасувати зміни</button>
             <button class="btn btn-primary" id="confirm-yes">Так, зберегти</button>
-            <button class="btn btn-secondary" id="confirm-cancel">Cancel (залишитись)</button>
+            <button class="btn btn-secondary" id="confirm-cancel">Скасувати (залишитися)</button>
         `;
 
         document.getElementById('confirm-yes').onclick = () => { resolve('yes'); closeModal(); };
@@ -483,10 +566,10 @@ window.goToTransactionsFilter = function(type, group, purpose, month) {
     loadPage('transactions');
 };
 
-// Dashboard
-async function renderDashboard() {
+// Forecast (previously Dashboard)
+async function renderForecast() {
     try {
-        pageTitle.innerText = 'Dashboard';
+        pageTitle.innerText = window.t ? window.t('Forecast') : 'Прогноз';
 
         const res = await fetch(`${API_BASE}/dashboard/stats?start_date=${state.startDate}&end_date=${state.endDate}`);
         const data = await res.json();
@@ -569,7 +652,7 @@ async function renderDashboard() {
             `<tr><td>Кв. ${d.apartment || d.apt_number}</td><td>${d.owner}</td><td class="text-right color-danger">${formatCurrency(d.debt)} ₴</td></tr>`
         ).join('');
         if (otherDebt > 0) {
-            debtorsRowsHtml += `<tr class="total-row"><td>Other</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
+            debtorsRowsHtml += `<tr class="total-row"><td>${window.t ? window.t('Other') : 'Інші'}</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
         }
 
         // ── Setup Forecast Scenarios state ──
@@ -585,7 +668,9 @@ async function renderDashboard() {
         const startBal = actualMonths.length > 0 ? data.balance[actualMonths.length - 1] : data.totals.start_balance;
 
         // Store actual data for chart overlay
-        const monthNamesUa = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthNamesUa = (window.currentLang === 'en')
+            ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            : ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
         window.dashboardActuals = {
             labels: actualMonths.map(m => `${monthNamesUa[parseInt(m.split('-')[1])-1]}-${m.split('-')[0].substring(2)}`),
             months: actualMonths,
@@ -604,21 +689,49 @@ async function renderDashboard() {
             }
         } catch(e) {}
 
+        let savedScenarioConfig = null;
+        try {
+            const scRes = await fetch(`${API_BASE}/forecast/scenarios/config`);
+            if (scRes.ok) savedScenarioConfig = await scRes.json();
+        } catch(e) {
+            console.error('Error fetching scenarios config:', e);
+        }
+
+        const sp = savedScenarioConfig && savedScenarioConfig.scenario_params;
+        const ex = savedScenarioConfig && savedScenarioConfig.excluded_activities;
+
         if (!window.scenarioParams) {
             window.scenarioParams = {
-                1: { balance: startBal, tariff: activeTariff, collection: 85 },
-                2: { balance: startBal, tariff: 8.0, collection: 85 },
-                3: { balance: startBal, tariff: 12.0, collection: 85 }
+                1: { balance: startBal, tariff: (sp && sp["1"] && sp["1"].tariff !== undefined) ? sp["1"].tariff : activeTariff, collection: (sp && sp["1"] && sp["1"].collection !== undefined) ? sp["1"].collection : 85 },
+                2: { balance: startBal, tariff: (sp && sp["2"] && sp["2"].tariff !== undefined) ? sp["2"].tariff : 8.0, collection: (sp && sp["2"] && sp["2"].collection !== undefined) ? sp["2"].collection : 85 },
+                3: { balance: startBal, tariff: (sp && sp["3"] && sp["3"].tariff !== undefined) ? sp["3"].tariff : 12.0, collection: (sp && sp["3"] && sp["3"].collection !== undefined) ? sp["3"].collection : 85 }
             };
         } else {
             window.scenarioParams[1].balance = startBal;
             window.scenarioParams[2].balance = startBal;
             window.scenarioParams[3].balance = startBal;
+            if (sp) {
+                if (sp["1"] && sp["1"].tariff !== undefined) window.scenarioParams[1].tariff = sp["1"].tariff;
+                if (sp["2"] && sp["2"].tariff !== undefined) window.scenarioParams[2].tariff = sp["2"].tariff;
+                if (sp["3"] && sp["3"].tariff !== undefined) window.scenarioParams[3].tariff = sp["3"].tariff;
+            }
         }
 
         if (!window.scenarioExcludedActivities) {
-            window.scenarioExcludedActivities = { 1: new Set(), 2: new Set(), 3: new Set() };
+            window.scenarioExcludedActivities = {
+                1: new Set((ex && ex["1"]) || []),
+                2: new Set((ex && ex["2"]) || []),
+                3: new Set((ex && ex["3"]) || [])
+            };
+        } else if (ex) {
+            // Also refresh if config was loaded
+            window.scenarioExcludedActivities = {
+                1: new Set(ex["1"] || []),
+                2: new Set(ex["2"] || []),
+                3: new Set(ex["3"] || [])
+            };
         }
+
         if (!window.scenariosData) {
             window.scenariosData = {};
         }
@@ -698,7 +811,14 @@ async function renderDashboard() {
                     <h3 style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;" data-collapsible="true">
                         <span class="dash-section-title">Initiatives Availability</span>
                         <div>
-                            ${(currentUser && currentUser.role === 'resident') ? '' : `<button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;"><i class="fas fa-plus"></i> Add Initiative</button>`}
+                            ${(currentUser && currentUser.role === 'resident') ? '' : `
+                                <button id="btn-save-initiatives" class="btn btn-success btn-sm" onclick="window.saveScenariosConfig(this); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 0.75rem;">
+                                    <i class="fas fa-save"></i> Зберегти
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="window.showAddActivityModalGlobal(); event.stopPropagation();" style="border-radius: 8px; font-size: 0.8rem; margin-right: 1rem;">
+                                    <i class="fas fa-plus"></i> Додати ініціативу
+                                </button>
+                            `}
                             <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
                         </div>
                     </h3>
@@ -709,6 +829,7 @@ async function renderDashboard() {
                     </div>
                 </div>
 
+                ${(currentUser && currentUser.role === 'resident') ? '' : `
                 <!-- Single Scenario Detail Card (Full Width) -->
                 <div id="scenario-detail-card" class="dash-card dash-table-card" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column; width: 100%; padding: 1.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
@@ -769,55 +890,9 @@ async function renderDashboard() {
                         <div class="loader" style="margin: 2rem auto;">Loading...</div>
                     </div>
                 </div>
-
-                <!-- Debtors and Expenses Breakdown -->
-                <div id="dash-tables-row" class="dashboard-tables-grid" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; align-items: stretch;">
-                    <div class="dash-table-card dash-card" id="dash-debtors" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
-                        <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Debtors (Top 10)</span>
-                            <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
-                        </h3>
-                        <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
-                            <div style="flex:1; min-width:200px; height:250px">
-                                <canvas id="debtChart"></canvas>
-                            </div>
-                            <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
-                                <table style="width:100%">
-                                    <thead><tr><th>Apartment</th><th>Owner</th><th class="text-right">Debt</th></tr></thead>
-                                    <tbody>
-                                        ${debtorsRowsHtml}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="dash-table-card dash-card" id="dash-expenses" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
-                        <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
-                            <span class="dash-section-title">Expenses: Breakdown</span>
-                            <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
-                        </h3>
-                        <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
-                            <div style="flex:1; min-width:200px; height:250px">
-                                <canvas id="expensesPieChart"></canvas>
-                            </div>
-                            <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
-                                <table style="width:100%">
-                                    <thead><tr><th>Group</th><th class="text-right">%</th><th class="text-right">Amount</th></tr></thead>
-                                    <tbody>
-                                        ${ebRows}
-                                        <tr class="total-row"><td>Total</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                `}
             </div>
         `;
-
-
-        renderDashboardCharts(data);
 
         // Run scenario forecasts
         await Promise.all([
@@ -826,12 +901,13 @@ async function renderDashboard() {
             window.generateForecastScenario(3)
         ]);
         window.switchDetailScenario(window.currentDetailScenarioIndex || 1);
-        
 
     } catch (err) {
-        contentArea.innerHTML = `<p class="color-danger">Dashboard error: ${err.message}</p>`;
+        contentArea.innerHTML = `<p class="color-danger">Forecast error: ${err.message}</p>`;
     }
 }
+window.renderForecast = renderForecast;
+window.renderDashboard = renderForecast;
 
 function renderDashboardCharts(data) {
     const debtCtx = document.getElementById('debtChart');
@@ -844,7 +920,9 @@ function renderDashboardCharts(data) {
     const existingExp = Chart.getChart("expensesPieChart");
     if (existingExp) existingExp.destroy();
 
-    const colors = ['#4a828f', '#588c73', '#bc6b7d', '#9e8565', '#5a7880', '#6f8b70', '#aa7d6f', '#b17487', '#83876e', '#937484', '#666974'];
+    const theme = getChartThemeColors();
+    const colors = theme.debtorColors;
+    const expColors = theme.expenseColors;
 
     let topDebtors = [];
     let otherDebt = 0;
@@ -871,8 +949,8 @@ function renderDashboardCharts(data) {
                 datasets: [{
                     data: pieData,
                     backgroundColor: colors.slice(0, pieLabels.length),
-                    borderWidth: 1,
-                    borderColor: 'var(--bg-color)'
+                    borderWidth: theme.isLight ? 2 : 1,
+                    borderColor: theme.sliceBorder
                 }]
             },
             options: {
@@ -896,9 +974,9 @@ function renderDashboardCharts(data) {
                 labels: expLabels,
                 datasets: [{
                     data: expData,
-                    backgroundColor: colors.slice(0, expLabels.length),
-                    borderWidth: 1,
-                    borderColor: 'var(--bg-color)'
+                    backgroundColor: expColors.slice(0, expLabels.length),
+                    borderWidth: theme.isLight ? 2 : 1,
+                    borderColor: theme.sliceBorder
                 }]
             },
             options: {
@@ -1102,7 +1180,7 @@ async function fetchAndShowInlineLogs(id) {
         const logs = await res.json();
 
         const typeNames = {
-            'adjustment': 'Корегування',
+            'adjustment': 'Коригування',
             'owner_change': 'Зміна власника',
             'area_change': 'Зміна площі'
         };
@@ -1315,7 +1393,7 @@ async function renderTransactions() {
             <div class="filters-bar" style="margin-bottom:1.5rem; display:flex; gap:0.5rem; align-items:flex-end; flex-wrap: wrap;">
                 <div class="form-group" style="flex-grow:1; max-width: 250px;">
                     <label>Пошук транзакцій</label>
-                    <input type="text" id="tx-search" class="form-control" placeholder="Пошук по всім полям..." value="${state.txSearch}">
+                    <input type="text" id="tx-search" class="form-control" placeholder="Пошук за всіма полями..." value="${state.txSearch}">
                 </div>
                 
                 <div style="margin-left:auto; display:flex; gap:0.5rem">
@@ -1884,9 +1962,14 @@ async function renderCharges() {
             <div class="filters-bar" style="margin-bottom:1.5rem; display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap">
                 <div style="flex-grow:1"></div>
                 <div id="recalc-status" style="font-size:0.9rem; margin-bottom:0.5rem"></div>
-                <button class="btn btn-secondary" onclick="exportMainReport()" style="margin-left:auto">
-                    <i class="fas fa-file-export"></i> Експорт (Excel/CSV)
-                </button>
+                <div style="display:flex; gap:0.5rem; margin-left:auto">
+                    <button class="btn btn-secondary" onclick="exportMainReport()">
+                        <i class="fas fa-file-excel"></i> <span data-i18n="Export (Excel/CSV)">Експорт (Excel/CSV)</span>
+                    </button>
+                    <button class="btn btn-secondary" id="btn-print-charges" onclick="printChargesReport()">
+                        <i class="fas fa-print"></i> <span data-i18n="Print">Друк</span>
+                    </button>
+                </div>
             </div>
             <div class="table-container" style="overflow-x: auto;">
                 <table id="charges-report-table">
@@ -1899,11 +1982,8 @@ async function renderCharges() {
             </div>`;
 
         if (currentUser && currentUser.role === 'resident' && !state.chargesResidentInit) {
-            const now = new Date();
-            const past = new Date();
-            past.setFullYear(now.getFullYear() - 1);
-            state.startDate = past.toISOString().split('T')[0];
-            state.endDate = now.toISOString().split('T')[0];
+            state.startDate = defaultStartDateStr;
+            state.endDate = defaultEndDateStr;
             state.chargesResidentInit = true;
             updateGlobalUI();
         }
@@ -1915,7 +1995,49 @@ async function renderCharges() {
     }
 }
 
-// updateReportRange removed, using global date range
+function normalizeReportData(rawData) {
+    if (!rawData || !Array.isArray(rawData)) return [];
+    return rawData.map(item => {
+        let runBal = item.start_balance || 0;
+        const normalizedMonthly = (item.monthly_details || []).map(md => {
+            const mStart = runBal;
+            const mCharge = md.charge || 0;
+            const mPay = md.payment || 0;
+            runBal = mStart - mCharge + mPay;
+            return {
+                period: md.period,
+                maintenance: md.maintenance_fee || 0,
+                lift: md.lift_fee || 0,
+                gas: md.gas_fee || 0,
+                adjustment: md.adjustment || 0,
+                total_charged: mCharge,
+                paid: mPay,
+                start_balance: mStart,
+                end_balance: runBal,
+                payment: mPay
+            };
+        });
+        return {
+            apartment: {
+                id: item.apartment_id,
+                number: item.apartment_number,
+                owner_name: item.owner_name,
+                area_m2: item.area_m2,
+                email: item.email
+            },
+            apartment_id: item.apartment_id,
+            summary: {
+                start_balance: item.start_balance,
+                end_balance: item.end_balance,
+                total_charged: item.total_charges,
+                total_paid: item.total_payments
+            },
+            start_balance: item.start_balance,
+            end_balance: item.end_balance,
+            monthly_details: normalizedMonthly
+        };
+    });
+}
 
 async function fetchAndRenderReport() {
     const tbody = document.getElementById('report-body');
@@ -1938,64 +2060,27 @@ async function fetchAndRenderReport() {
             return;
         }
 
-        // Normalize backend response to match frontend expectations
-        const data = rawData.map(item => {
-            let runBal = item.start_balance;
-            const normalizedMonthly = (item.monthly_details || []).map(md => {
-                const mStart = runBal;
-                const mCharge = md.charge || 0;
-                const mPay = md.payment || 0;
-                runBal = mStart - mCharge + mPay;
-                return {
-                    period: md.period,
-                    maintenance: md.maintenance_fee || 0,
-                    lift: md.lift_fee || 0,
-                    gas: md.gas_fee || 0,
-                    adjustment: md.adjustment || 0,
-                    total_charged: mCharge,
-                    paid: mPay,
-                    start_balance: mStart,
-                    end_balance: runBal,
-                    payment: mPay
-                };
-            });
-            return {
-                apartment: {
-                    id: item.apartment_id,
-                    number: item.apartment_number,
-                    owner_name: item.owner_name,
-                    area_m2: item.area_m2,
-                    email: item.email
-                },
-                apartment_id: item.apartment_id,
-                summary: {
-                    start_balance: item.start_balance,
-                    end_balance: item.end_balance,
-                    total_charged: item.total_charges,
-                    total_paid: item.total_payments
-                },
-                start_balance: item.start_balance,
-                end_balance: item.end_balance,
-                monthly_details: normalizedMonthly
-            };
-        });
+        const data = normalizeReportData(rawData);
+        state.currentReportData = data;
 
         const months = data[0].monthly_details.map(m => m.period);
         const isResident = currentUser && currentUser.role === 'resident';
         const isSingleMonth = months.length === 1 && !isResident;
 
         if (isResident) {
+            const isEn = (window.currentLang === 'en');
             thead.innerHTML = `
                 <tr>
-                    <th>Місяць</th>
-                    <th class="text-right">Борг на початок</th>
-                    <th class="text-right">Квартплата</th>
-                    <th class="text-right">Ліфт</th>
-                    <th class="text-right">Газ</th>
-                    <th class="text-right">Корегування</th>
-                    <th class="text-right">Нараховано загалом</th>
-                    <th class="text-right">Сплачено</th>
-                    <th class="text-right">Борг на кінець</th>
+                    <th>${window.t ? window.t('Місяць') : 'Місяць'}</th>
+                    <th class="text-right">${window.t ? window.t('Борг на початок') : 'Борг на початок'}</th>
+                    <th class="text-right">${window.t ? window.t('Квартплата') : 'Квартплата'}</th>
+                    <th class="text-right">${window.t ? window.t('Ліфт') : 'Ліфт'}</th>
+                    <th class="text-right">${window.t ? window.t('Газ') : 'Газ'}</th>
+                    <th class="text-right">${window.t ? window.t('Коригування') : 'Коригування'}</th>
+                    <th class="text-right">${window.t ? window.t('Нараховано загалом') : 'Нараховано загалом'}</th>
+                    <th class="text-right">${window.t ? window.t('Сплачено') : 'Сплачено'}</th>
+                    <th class="text-right">${window.t ? window.t('Борг на кінець') : 'Борг на кінець'}</th>
+                    <th class="text-center" style="width: 75px;">${window.t ? window.t('Квитанція') : 'Квитанція'}</th>
                 </tr>`;
             
             let html = '';
@@ -2004,14 +2089,120 @@ async function fetchAndRenderReport() {
             const apt = data[0].apartment;
             let maint = 0, lift = 0, gas = 0, adj = 0;
             
-            const resInfo = document.getElementById('resident-info-display');
-            if (resInfo && apt) {
-                resInfo.innerHTML = `
-                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 3px">${apt.owner_name || 'Власник не вказаний'}</div>
-                    <div>Площа: ${apt.area_m2 || '—'} м²</div>
-                    <div>Email: ${apt.email || currentUser.email || '—'}</div>
-                `;
-                resInfo.style.display = 'block';
+            if (typeof window.renderResidentSidebar === 'function' && apt) {
+                window.renderResidentSidebar(apt);
+            }
+
+            // Top resident summary cards
+            const lastMd = mdArray && mdArray.length > 0 ? mdArray[mdArray.length - 1] : null;
+            const monthlyAccrual = lastMd ? (lastMd.maintenance + lastMd.lift + lastMd.gas) : 0;
+            const endBal = (lastMd ? lastMd.end_balance : sum.end_balance) || 0;
+            const isDebt = endBal < 0;
+            const debtAmount = Math.abs(endBal);
+
+            let resTopHtml = `
+                <div id="resident-top-section">
+                    <div class="dash-card" id="resident-summary-cards" style="margin-bottom: 1.5rem; overflow: hidden; padding: 0; background: transparent; border: none; box-shadow: none;">
+                        <div class="stats-grid" style="margin-bottom: 0;">
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div class="stat-card-title">
+                                        <i class="fas fa-home" style="color:var(--accent-color)"></i>
+                                        ${window.t ? window.t('Адреса') : 'Адреса'}
+                                    </div>
+                                    <span class="badge-apt">${window.t ? window.t('кв. №') : 'кв. №'}${apt ? apt.number : '—'}</span>
+                                </div>
+                                <div class="stat-card-text">
+                                    ${isEn ? '14 Mykhailo Hrushevsky St.' : 'вул. Михайла Грушевського, 14'}
+                                </div>
+                                <div class="stat-card-meta">
+                                    ${isEn ? 'HOA #102 "Zapolyarie"' : 'ЖБК № 102 «Заполяр\'є»'}
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div class="stat-card-title">
+                                        <i class="fas fa-user" style="color:var(--accent-color)"></i>
+                                        ${window.t ? window.t('Власник') : 'Власник'}
+                                    </div>
+                                    <button type="button" class="btn-icon-subtle" onclick="window.goToOwnerChangeRequest()" title="${window.t ? window.t('Подати заявку на зміну даних власника') : 'Подати заявку на зміну даних власника'}" style="background: none; border: 1px solid transparent; color: var(--text-secondary); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.color='var(--accent-color)'; this.style.borderColor='var(--border-color)'; this.style.backgroundColor='var(--bg-secondary)';" onmouseout="this.style.color='var(--text-secondary)'; this.style.borderColor='transparent'; this.style.backgroundColor='transparent';">
+                                        <i class="fas fa-pen"></i>
+                                    </button>
+                                </div>
+                                <div class="stat-card-text">
+                                    ${(apt && apt.owner_name) || (window.t ? window.t('Власник') : 'Власник')}
+                                </div>
+                                <div class="stat-card-meta">
+                                    ${window.t ? window.t('Площа:') : 'Площа:'} <b>${(apt && apt.area_m2) || '—'} ${window.t ? window.t('м²') : 'м²'}</b>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div class="stat-card-title">
+                                        <i class="fas fa-calendar-alt" style="color:var(--accent-color)"></i>
+                                        ${window.t ? window.t('Щомісячне нарахування') : 'Щомісячне нарахування'}
+                                    </div>
+                                </div>
+                                <div class="stat-card-value color-info">
+                                    ${formatCurrency(monthlyAccrual)} ₴
+                                </div>
+                                <div class="stat-card-meta">
+                                    ${window.t ? window.t('квартплата + ліфт + газ') : 'квартплата + ліфт + газ'}
+                                </div>
+                            </div>
+                            <div class="stat-card" style="cursor: pointer; position: relative;" onclick="window.scrollToChargesTable()" title="${window.t ? window.t('Клікніть для перегляду таблиці нарахувань') : 'Клікніть для перегляду таблиці нарахувань'}">
+                                <div class="stat-card-header">
+                                    <div class="stat-card-title">
+                                        <i class="fas fa-wallet" style="color:var(--accent-color)"></i>
+                                        ${isDebt ? (window.t ? window.t('Заборгованість') : 'Заборгованість') : (window.t ? window.t('Стан рахунку') : 'Стан рахунку')}
+                                    </div>
+                                    <i class="fas fa-arrow-down" style="font-size:0.75rem; opacity:0.6;"></i>
+                                </div>
+                                <div class="stat-card-value ${isDebt ? 'color-danger' : 'color-success'}">
+                                    ${isDebt ? `- ${formatCurrency(debtAmount)} ₴` : (endBal > 0 ? `+ ${formatCurrency(endBal)} ₴ ${window.t ? window.t('(переплата)') : '(переплата)'}` : '0.00 ₴')}
+                                </div>
+                                ${isDebt ? `
+                                <div style="margin-top: 6px;">
+                                    <button class="btn btn-primary" onclick="event.stopPropagation(); window.openPaymentModal(${debtAmount}, '${apt ? apt.number : ''}', '${((apt && apt.owner_name) || '').replace(/'/g, "\\'")}')" style="font-size: 0.8125rem; font-weight: 600; padding: 6px 16px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; border: none; box-shadow: 0 2px 8px rgba(37,99,235,0.3); cursor: pointer;">
+                                        <i class="fas fa-credit-card"></i> ${window.t ? window.t('Оплатити') : 'Оплатити'}
+                                    </button>
+                                </div>` : `<div class="stat-card-meta color-success">✓ ${isEn ? 'No debt' : 'Без заборгованості'}</div>`}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resident Cash Flow & Balance Chart -->
+                    <div class="dash-card chart-container" id="resident-charges-chart-card" style="margin-bottom: 1.5rem; overflow: hidden; min-height: 280px; display: flex; flex-direction: column; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 8px;">
+                            <h3 class="dash-section-title" style="margin: 0;">
+                                <i class="fas fa-chart-bar" style="color: var(--accent-color);"></i>
+                                ${window.t ? window.t('Графік балансу та грошових потоків') : 'Графік балансу та грошових потоків'}
+                            </h3>
+                            <div style="display: flex; align-items: center; gap: 12px; font-size: 0.75rem; color: var(--text-secondary); flex-wrap: wrap;">
+                                <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></span> ${window.t ? window.t('Сплачено (надходження)') : 'Сплачено (надходження)'}</span>
+                                <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></span> ${window.t ? window.t('Нараховано (витрати)') : 'Нараховано (витрати)'}</span>
+                                <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 14px; height: 3px; background: #38bdf8; border-radius: 2px;"></span> ${window.t ? window.t('Стан рахунку (Баланс)') : 'Стан рахунку (Баланс)'}</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content" style="flex-grow: 1; display: flex; flex-direction: column;">
+                            <div style="flex-grow: 1; min-height: 220px; position: relative;">
+                                <canvas id="residentChargesChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            let existingTop = document.getElementById('resident-top-section') || document.getElementById('resident-summary-cards');
+            if (existingTop) {
+                existingTop.outerHTML = resTopHtml;
+            } else {
+                const tableCont = document.querySelector('.table-container');
+                if (tableCont && tableCont.parentNode) {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = resTopHtml;
+                    tableCont.parentNode.insertBefore(temp.firstElementChild, tableCont);
+                }
             }
             
             mdArray.forEach(md => {
@@ -2031,13 +2222,18 @@ async function fetchAndRenderReport() {
                     <td class="text-right">${formatCurrency(md.total_charged)}</td>
                     <td class="text-right color-success">${formatCurrency(md.paid)}</td>
                     <td class="text-right ${md.end_balance < 0 ? 'color-danger' : ''}">${formatCurrency(md.end_balance)}</td>
+                    <td class="text-center" style="white-space: nowrap;">
+                        <button class="btn btn-sm btn-secondary" onclick="window.showResidentSingleReceipt('${md.period}')" title="${isEn ? 'View printable receipt' : 'Переглянути квитанцію'}" style="padding: 4px 8px; border-radius: 6px; font-size: 0.8125rem; color: var(--accent-color); display: inline-flex; align-items: center; justify-content: center; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); cursor: pointer;" onmouseover="this.style.background='rgba(56,189,248,0.18)'" onmouseout="this.style.background='rgba(56,189,248,0.08)'">
+                            <i class="fas fa-file-invoice"></i>
+                        </button>
+                    </td>
                 </tr>`;
             });
             tbody.innerHTML = html;
 
             document.getElementById('report-footer').innerHTML = `
-                <tr style="font-weight: 700; background: rgba(255,255,255,0.08)">
-                    <td>ЗАГАЛОМ:</td>
+                <tr class="total-row" style="background: rgba(255,255,255,0.06)">
+                    <td>${window.t ? window.t('ЗАГАЛОМ:') : 'ЗАГАЛОМ:'}</td>
                     <td class="text-right ${sum.start_balance < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(sum.start_balance)} ₴</td>
                     <td class="text-right">${formatCurrency(maint)} ₴</td>
                     <td class="text-right">${formatCurrency(lift)} ₴</td>
@@ -2046,34 +2242,38 @@ async function fetchAndRenderReport() {
                     <td class="text-right">${formatCurrency(sum.total_charged)} ₴</td>
                     <td class="text-right color-success">${formatCurrency(sum.total_paid)} ₴</td>
                     <td class="text-right ${sum.end_balance < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(sum.end_balance)} ₴</td>
+                    <td class="text-center">—</td>
                 </tr>`;
+
+            renderResidentChargesChart(mdArray);
             return;
         }
 
         if (isSingleMonth) {
             thead.innerHTML = `
                 <tr>
-                    <th>№ кв.</th>
-                    <th>П.І.Б.</th>
-                    <th class="text-right">Борг на початок</th>
-                    <th class="text-right">Квартплата</th>
-                    <th class="text-right">Ліфт</th>
-                    <th class="text-right">Газ</th>
-                    <th class="text-right">Корегування</th>
-                    <th class="text-right">Нараховано загалом</th>
-                    <th class="text-right">Сплачено</th>
-                    <th class="text-right">Борг на кінець</th>
+                    <th>${window.t ? window.t('№ кв.') : '№ кв.'}</th>
+                    <th>${window.t ? window.t('П.І.Б.') : 'П.І.Б.'}</th>
+                    <th class="text-right">${window.t ? window.t('Борг на початок') : 'Борг на початок'}</th>
+                    <th class="text-right">${window.t ? window.t('Квартплата') : 'Квартплата'}</th>
+                    <th class="text-right">${window.t ? window.t('Ліфт') : 'Ліфт'}</th>
+                    <th class="text-right">${window.t ? window.t('Газ') : 'Газ'}</th>
+                    <th class="text-right">${window.t ? window.t('Коригування') : 'Коригування'}</th>
+                    <th class="text-right">${window.t ? window.t('Нараховано загалом') : 'Нараховано загалом'}</th>
+                    <th class="text-right">${window.t ? window.t('Сплачено') : 'Сплачено'}</th>
+                    <th class="text-right">${window.t ? window.t('Борг на кінець') : 'Борг на кінець'}</th>
+                    <th class="text-center">${window.t ? window.t('Деталізація') : 'Деталізація'}</th>
                 </tr>`;
         } else {
             thead.innerHTML = `
                 <tr>
-                    <th>№ кв.</th>
-                    <th>П.І.Б.</th>
-                    <th class="text-right">Борг на початок<br><small>(${formatPeriod(months[0])})</small></th>
-                    <th class="text-right">Нараховано загалом<br><small>(За період)</small></th>
-                    <th class="text-right">Сплачено<br><small>(За період)</small></th>
-                    <th class="text-right">Борг на кінець<br><small>(${formatPeriod(months[months.length-1])})</small></th>
-                    <th>Деталізація</th>
+                    <th>${window.t ? window.t('№ кв.') : '№ кв.'}</th>
+                    <th>${window.t ? window.t('П.І.Б.') : 'П.І.Б.'}</th>
+                    <th class="text-right">${window.t ? window.t('Борг на початок') : 'Борг на початок'}<br><small>(${formatPeriod(months[0])})</small></th>
+                    <th class="text-right">${window.t ? window.t('Нараховано загалом') : 'Нараховано загалом'}<br><small>${window.t ? window.t('(За період)') : '(За період)'}</small></th>
+                    <th class="text-right">${window.t ? window.t('Сплачено') : 'Сплачено'}<br><small>${window.t ? window.t('(За період)') : '(За період)'}</small></th>
+                    <th class="text-right">${window.t ? window.t('Борг на кінець') : 'Борг на кінець'}<br><small>(${formatPeriod(months[months.length-1])})</small></th>
+                    <th class="text-center">${window.t ? window.t('Деталізація') : 'Деталізація'}</th>
                 </tr>`;
         }
 
@@ -2106,6 +2306,44 @@ async function fetchAndRenderReport() {
                         <td class="text-right" style="font-weight:600">${formatCurrency(md.total_charged)}</td>
                         <td class="text-right color-success" style="font-weight:600">${formatCurrency(md.paid)}</td>
                         <td class="text-right ${md.end_balance < 0 ? 'color-danger' : 'color-success'}"><b>${formatCurrency(md.end_balance)}</b></td>
+                        <td class="text-center">
+                            <button class="btn btn-secondary btn-sm" onclick="toggleApartmentHistory(this.closest('tr'), ${item.apartment.id})">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="history-${item.apartment.id}" class="history-row" style="display:none">
+                        <td colspan="11" style="padding: 0; background: rgba(0,0,0,0.2)">
+                            <table style="width:100%; font-size:0.85rem; margin:0">
+                                <thead>
+                                    <tr style="background:transparent; border-bottom:1px solid rgba(255,255,255,0.1)">
+                                        <th>Місяць</th>
+                                        <th class="text-right">Борг на початок</th>
+                                        <th class="text-right">Квартплата</th>
+                                        <th class="text-right">Ліфт</th>
+                                        <th class="text-right">Газ</th>
+                                        <th class="text-right">Коригування</th>
+                                        <th class="text-right">Нараховано загалом</th>
+                                        <th class="text-right">Сплачено</th>
+                                        <th class="text-right">Борг на кінець</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${item.monthly_details.map(md => `
+                                    <tr>
+                                        <td>${formatPeriod(md.period)}</td>
+                                        <td class="text-right ${md.start_balance < 0 ? 'color-danger' : ''}">${formatCurrency(md.start_balance)}</td>
+                                        <td class="text-right">${formatCurrency(md.maintenance)}</td>
+                                        <td class="text-right">${formatCurrency(md.lift)}</td>
+                                        <td class="text-right">${formatCurrency(md.gas)}</td>
+                                        <td class="text-right">${formatCurrency(md.adjustment)}</td>
+                                        <td class="text-right">${formatCurrency(md.total_charged)}</td>
+                                        <td class="text-right color-success">${formatCurrency(md.paid)}</td>
+                                        <td class="text-right ${md.end_balance < 0 ? 'color-danger' : ''}">${formatCurrency(md.end_balance)}</td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </td>
                     </tr>`;
             } else {
                 html += `
@@ -2132,7 +2370,7 @@ async function fetchAndRenderReport() {
                                         <th class="text-right">Квартплата</th>
                                         <th class="text-right">Ліфт</th>
                                         <th class="text-right">Газ</th>
-                                        <th class="text-right">Корегування</th>
+                                        <th class="text-right">Коригування</th>
                                         <th class="text-right">Нараховано загалом</th>
                                         <th class="text-right">Сплачено</th>
                                         <th class="text-right">Борг на кінець</th>
@@ -2171,6 +2409,7 @@ async function fetchAndRenderReport() {
                 <td class="text-right">${formatCurrency(totals.charged)} ₴</td>
                 <td class="text-right color-success">${formatCurrency(totals.paid)} ₴</td>
                 <td class="text-right ${totals.end < 0 ? 'color-danger' : 'color-success'}">${formatCurrency(totals.end)} ₴</td>
+                <td></td>
             `;
         } else {
             footerCells = `
@@ -2199,10 +2438,244 @@ function toggleMonthExpand(month) {
     fetchAndRenderReport();
 }
 
+function renderResidentChargesChart(mdArray) {
+    if (!mdArray || mdArray.length === 0 || typeof Chart === 'undefined') return;
+    const canvas = document.getElementById('residentChargesChart');
+    if (!canvas) return;
+
+    const existingChart = Chart.getChart('residentChargesChart');
+    if (existingChart) existingChart.destroy();
+
+    const theme = getChartThemeColors();
+    const labels = mdArray.map(m => formatPeriod(m.period));
+    const paidData = mdArray.map(m => m.paid || 0);
+    const chargedData = mdArray.map(m => -Math.abs(m.total_charged || 0));
+    const balanceData = mdArray.map(m => m.end_balance || 0);
+
+    new Chart(canvas, {
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: window.t ? window.t('Сплачено') : 'Сплачено',
+                    data: paidData,
+                    backgroundColor: theme.isLight ? '#16a34a' : '#10b981',
+                    borderRadius: 4,
+                    order: 2,
+                    barPercentage: 0.6
+                },
+                {
+                    type: 'bar',
+                    label: window.t ? window.t('Нараховано') : 'Нараховано',
+                    data: chargedData,
+                    backgroundColor: theme.isLight ? '#dc2626' : '#ef4444',
+                    borderRadius: 4,
+                    order: 2,
+                    barPercentage: 0.6
+                },
+                {
+                    type: 'line',
+                    label: window.t ? window.t('Баланс') : 'Баланс',
+                    data: balanceData,
+                    borderColor: theme.isLight ? '#0284c7' : '#38bdf8',
+                    backgroundColor: theme.isLight ? 'rgba(2, 132, 199, 0.08)' : 'rgba(56, 189, 248, 0.08)',
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: theme.isLight ? '#0284c7' : '#38bdf8',
+                    pointHoverRadius: 6,
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const val = ctx.raw;
+                            const isEn = (window.currentLang === 'en');
+                            if (ctx.dataset.type === 'bar' && val <= 0) {
+                                const lbl = isEn ? 'Charged' : 'Нараховано';
+                                return `${lbl}: -${formatCurrency(Math.abs(val))} ₴`;
+                            } else if (ctx.dataset.type === 'bar') {
+                                const lbl = isEn ? 'Paid' : 'Сплачено';
+                                return `${lbl}: +${formatCurrency(val)} ₴`;
+                            } else {
+                                const lbl = isEn ? 'Account Balance' : 'Стан рахунку (Баланс)';
+                                return `${lbl}: ${val < 0 ? '-' : '+'}${formatCurrency(Math.abs(val))} ₴`;
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: theme.gridColor },
+                    ticks: {
+                        color: theme.textColor,
+                        font: { family: "'Inter', sans-serif", size: 12, weight: '600' }
+                    }
+                },
+                y: {
+                    grid: {
+                        color: ctx => ctx.tick.value === 0 ? theme.zeroLineColor : theme.gridColor,
+                        lineWidth: ctx => ctx.tick.value === 0 ? 1.5 : 1
+                    },
+                    ticks: {
+                        color: theme.textColor,
+                        font: { family: "'Inter', sans-serif", size: 12, weight: '600' },
+                        callback: function(v) { return formatCurrency(v) + ' ₴'; }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Resident Single-Month Receipt Modal & Actions ─────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+window.showResidentSingleReceipt = async function(period) {
+    const modal = document.getElementById('resident-receipt-modal');
+    const modalBody = document.getElementById('res-receipt-modal-body');
+    const modalTitle = document.getElementById('res-receipt-modal-title');
+    if (!modal || !modalBody) return;
+
+    modal.style.display = 'flex';
+    modalBody.innerHTML = '<div class="loader" style="margin: 2rem auto;">Завантаження квитанції...</div>';
+
+    try {
+        if (!state.currentReportData || state.currentReportData.length === 0) {
+            modalBody.innerHTML = '<p class="color-danger" style="padding:1rem;">Дані нарахувань не знайдено.</p>';
+            return;
+        }
+
+        const repApt = state.currentReportData[0];
+        const apt = repApt.apartment;
+        const md = (repApt.monthly_details || []).find(m => m.period === period);
+        if (!md || !apt) {
+            modalBody.innerHTML = '<p class="color-danger" style="padding:1rem;">Дані за обраний місяць не знайдено.</p>';
+            return;
+        }
+
+        const isEn = (window.currentLang === 'en');
+        const formattedPeriod = formatPeriod(period);
+        if (modalTitle) {
+            modalTitle.innerText = `${isEn ? 'Receipt for' : 'Квитанція за'} ${formattedPeriod} (${isEn ? 'Apt. #' : 'кв. №'}${apt.number})`;
+        }
+
+        const [yStr, mStr] = period.split('-');
+        const y = parseInt(yStr);
+        const m = parseInt(mStr);
+        const dateStart = new Date(y, m - 1, 0);
+        const dateEnd = new Date(y, m, 0);
+
+        const startPeriodFormatted = `${String(dateStart.getDate()).padStart(2, '0')}.${String(dateStart.getMonth() + 1).padStart(2, '0')}.${dateStart.getFullYear()}`;
+        const endPeriodFormatted = `${String(dateEnd.getDate()).padStart(2, '0')}.${String(dateEnd.getMonth() + 1).padStart(2, '0')}.${dateEnd.getFullYear()}`;
+
+        const monthsUaShort = ['січ', 'лют', 'бер', 'квіт', 'трав', 'черв', 'лип', 'серп', 'вер', 'жовт', 'лист', 'груд'];
+        const periodStr = `${monthsUaShort[m - 1]}-${String(y).slice(-2)}`;
+
+        const startDebt = md.start_balance < 0 ? Math.abs(md.start_balance) : -md.start_balance;
+        const endDebt = md.end_balance < 0 ? Math.abs(md.end_balance) : -md.end_balance;
+        const owner = apt.owner_name || '—';
+        const area = apt.area_m2 || 0;
+
+        const receiptHtml = `
+            <div class="receipt" id="resident-receipt-printable-card" style="background:#ffffff; color:#0f172a; padding:1.25rem 1.4rem; font-family:'Inter', sans-serif; width: 100%; max-width: 380px; border-radius:10px; box-shadow:0 6px 24px rgba(0,0,0,0.25); border: 1px solid #cbd5e1; font-size: 0.8125rem; line-height: 1.45;">
+                <div class="r-header" style="text-align:center; margin-bottom:10px;">
+                    <div style="font-weight:700; font-size:1.05rem; color:#0f172a; letter-spacing:-0.01em;">ЖБК № 102 "Заполярье"</div>
+                    <div style="font-size:0.75rem; color:#475569; margin-top:3px;">Р/Р UA803052990000026005050281468 ПАТ КБ "ПРИВАТБАНК"</div>
+                    <div style="font-size:0.75rem; color:#475569;">МФО 305299 ЄДРПОУ 23025161</div>
+                </div>
+                <hr style="border:0; border-top:1px solid #cbd5e1; margin:8px 0;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Абонент:</span> <span style="font-weight:600; color:#0f172a;">${owner}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Адреса:</span> <span>вул. Михайла Грушевського, 14, кв. <b>${apt.number}</b></span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span><b>Загальна площа, м²</b></span> <span><b>${area.toFixed(2)}</b></span></div>
+                <hr style="border:0; border-top:1px solid #cbd5e1; margin:8px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#64748b;"><span>1. За експл. витрати за 1 м² з 01.01.2020</span> <span>4,40 грн.</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span><b>Разом</b></span> <span><b>${md.maintenance.toFixed(2)} грн.</b></span></div>
+                <hr style="border:0; border-top:1px dashed #e2e8f0; margin:5px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#64748b;"><span>2. За тех. обсл. систем газопостачання<br>за 1 м² з 01.01.2022</span> <span>0,47 грн.</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span><b>Разом</b></span> <span><b>${md.gas.toFixed(2)} грн.</b></span></div>
+                <hr style="border:0; border-top:1px dashed #e2e8f0; margin:5px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#64748b;"><span>3. За тех. обслуговування ліфтів за 1 м²</span> <span>0,90 грн.</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span><b>Разом</b></span> <span><b>${md.lift.toFixed(2)} грн.</b></span></div>
+                <hr style="border:0; border-top:1px solid #cbd5e1; margin:8px 0;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Нараховано <b>${periodStr}</b></span> <span><b>${md.total_charged.toFixed(2)} грн.</b></span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span>Коригування</span> <span>${(md.adjustment || 0).toFixed(2)} грн.</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span><b>Борг</b> на ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:3px;"><span><b>Сплачено</b> ${periodStr}</span> <span><b>${(md.paid || 0).toFixed(2)} грн.</b></span></div>
+                <div style="display:flex; justify-content:space-between; font-size:0.92rem; font-weight:700; color:#dc2626; margin-top:5px; padding-top:5px; border-top:1px solid #94a3b8;"><span><b>Борг</b> на ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
+                <hr style="border:0; border-top:1px solid #cbd5e1; margin:8px 0;">
+                <div style="font-size:0.75rem; color:#475569; text-align:center; line-height:1.4;">
+                    <div>Бухгалтер: Олена Олександрівна, тел. 098 206 09 31</div>
+                    <div>Приймальний день: субота з 12<sup>00</sup> до 16<sup>00</sup></div>
+                </div>
+            </div>
+        `;
+
+        modalBody.innerHTML = receiptHtml;
+        window._currentResidentReceiptPeriod = period;
+        window._currentResidentReceiptApt = apt.number;
+
+    } catch (err) {
+        modalBody.innerHTML = `<p class="color-danger" style="padding:1rem;">Помилка завантаження квитанції: ${err.message}</p>`;
+    }
+};
+
+window.closeResidentReceiptModal = function() {
+    const modal = document.getElementById('resident-receipt-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.printResidentSingleReceiptAction = function() {
+    const card = document.getElementById('resident-receipt-printable-card');
+    if (!card) return;
+    const oldPrint = document.getElementById('global-print-area');
+    if (oldPrint) oldPrint.remove();
+    
+    const globalPrintArea = document.createElement('div');
+    globalPrintArea.id = 'global-print-area';
+    globalPrintArea.className = 'print-container';
+    globalPrintArea.innerHTML = `<div class="receipt-grid preview-grid" style="display:flex; justify-content:center; padding:1rem;">${card.outerHTML}</div>`;
+    document.body.appendChild(globalPrintArea);
+    window.print();
+};
+
+window.downloadResidentReceiptPdf = function() {
+    const card = document.getElementById('resident-receipt-printable-card');
+    if (!card) return;
+    const aptNum = window._currentResidentReceiptApt || 'kv';
+    const period = window._currentResidentReceiptPeriod || 'period';
+    if (typeof html2pdf !== 'undefined') {
+        html2pdf().from(card).set({
+            margin: [8, 8, 8, 8],
+            filename: `Kvitantsiya_kv${aptNum}_${period}.pdf`,
+            html2canvas: { scale: 2 },
+            jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a5' }
+        }).save();
+    } else {
+        window.printResidentSingleReceiptAction();
+    }
+};
+
 function formatPeriod(p) {
+    if (!p) return '';
     const [y, m] = p.split('-');
-    const months = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
-    return `${months[parseInt(m) - 1]}-${y.substring(2)}`;
+    const isEn = (window.currentLang === 'en');
+    const monthsUk = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+    const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = isEn ? monthsEn : monthsUk;
+    const idx = parseInt(m, 10) - 1;
+    return `${months[idx] || m}-${y.substring(2)}`;
 }
 
 function toggleApartmentHistory(row, aptId) {
@@ -2211,77 +2684,174 @@ function toggleApartmentHistory(row, aptId) {
     const isVisible = detailRow.style.display !== 'none';
     detailRow.style.display = isVisible ? 'none' : 'table-row';
     row.classList.toggle('expanded', !isVisible);
+    const icon = row.querySelector('.fa-chevron-down, .fa-chevron-up');
+    if (icon) {
+        icon.className = isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+    }
 }
 
 // ── Export Functions ──────────────────────────────────────────────────────────
 async function exportMainReport() {
     try {
+        const startPeriod = (state.startDate || '2026-01-01').substring(0, 7);
+        const endPeriod = (state.endDate || '2026-12-31').substring(0, 7);
+
         const res = await fetch(`${API_BASE}/charges/report`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                start_period: state.startPeriod,
-                end_period: state.endPeriod
+                start_period: startPeriod,
+                end_period: endPeriod
             })
         });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `Помилка сервера: ${res.status}`);
+        }
         const data = await res.json();
         if (!data || data.length === 0) return alert('Немає даних для експорту');
 
-        const months = data[0].monthly_details.map(m => m.period);
+        const months = (data[0].monthly_details || []).map(m => m.period);
         const isSingleMonth = months.length === 1;
 
         let csv = [];
-        // Header
+
         if (isSingleMonth) {
-            csv.push(['Кв.', 'ПІБ', 'Поч. борг', 'Утримання', 'Ліфт', 'Газ', 'Корегув.', 'Нараховано', 'Сплачено', 'Кін. борг'].join(';'));
-        } else {
-            let row1 = ['Кв.', 'ПІБ', 'Поч. борг'];
-            months.forEach(m => {
-                if (state.expandedMonth === m) row1.push(`${m} (Утрим.)`, `${m} (Ліфт)`, `${m} (Газ)`, `${m} (Кор.)`, `${m} (Сплачено)`, `${m} (Debt)`);
-                else row1.push(m);
+            // Header for single month
+            csv.push(['№ кв.', 'П.І.Б.', 'Борг на початок', 'Квартплата', 'Ліфт', 'Газ', 'Коригування', 'Нараховано загалом', 'Сплачено', 'Борг на кінець'].join(';'));
+            
+            let totStart = 0, totMaint = 0, totLift = 0, totGas = 0, totAdj = 0, totCharge = 0, totPaid = 0, totEnd = 0;
+
+            data.forEach(row => {
+                const m = (row.monthly_details && row.monthly_details[0]) || {};
+                const startB = typeof row.start_balance === 'number' ? row.start_balance : 0;
+                const endB = typeof row.end_balance === 'number' ? row.end_balance : 0;
+                const maint = m.maintenance_fee || 0;
+                const lift = m.lift_fee || 0;
+                const gas = m.gas_fee || 0;
+                const adj = m.adjustment || 0;
+                const charge = m.charge || 0;
+                const paid = m.payment || 0;
+
+                totStart += startB;
+                totMaint += maint;
+                totLift += lift;
+                totGas += gas;
+                totAdj += adj;
+                totCharge += charge;
+                totPaid += paid;
+                totEnd += endB;
+
+                csv.push([
+                    row.apartment_number,
+                    `"${(row.owner_name || '').replace(/"/g, '""')}"`,
+                    startB.toFixed(2),
+                    maint.toFixed(2),
+                    lift.toFixed(2),
+                    gas.toFixed(2),
+                    adj.toFixed(2),
+                    charge.toFixed(2),
+                    paid.toFixed(2),
+                    endB.toFixed(2)
+                ].join(';'));
             });
-            row1.push('Кін. борг');
-            csv.push(row1.join(';'));
+
+            // Totals row
+            csv.push([
+                'ЗАГАЛОМ',
+                '',
+                totStart.toFixed(2),
+                totMaint.toFixed(2),
+                totLift.toFixed(2),
+                totGas.toFixed(2),
+                totAdj.toFixed(2),
+                totCharge.toFixed(2),
+                totPaid.toFixed(2),
+                totEnd.toFixed(2)
+            ].join(';'));
+        } else {
+            // Header for multiple months (Summary + detailed monthly breakdown)
+            let header = [
+                '№ кв.',
+                'П.І.Б.',
+                `Борг на початок (${formatPeriod(months[0])})`,
+                'Нараховано загалом',
+                'Сплачено загалом',
+                `Борг на кінець (${formatPeriod(months[months.length - 1])})`
+            ];
+
+            // Add monthly columns
+            months.forEach(m => {
+                const pLabel = formatPeriod(m);
+                header.push(`${pLabel} (Нараховано)`, `${pLabel} (Сплачено)`, `${pLabel} (Залишок)`);
+            });
+            csv.push(header.join(';'));
+
+            let totStart = 0, totCharge = 0, totPaid = 0, totEnd = 0;
+            const monthTotals = months.map(() => ({ charge: 0, payment: 0, endBal: 0 }));
+
+            data.forEach(row => {
+                const startB = typeof row.start_balance === 'number' ? row.start_balance : 0;
+                const endB = typeof row.end_balance === 'number' ? row.end_balance : 0;
+                const ch = typeof row.total_charges === 'number' ? row.total_charges : 0;
+                const pmt = typeof row.total_payments === 'number' ? row.total_payments : 0;
+
+                totStart += startB;
+                totCharge += ch;
+                totPaid += pmt;
+                totEnd += endB;
+
+                let csvRow = [
+                    row.apartment_number,
+                    `"${(row.owner_name || '').replace(/"/g, '""')}"`,
+                    startB.toFixed(2),
+                    ch.toFixed(2),
+                    pmt.toFixed(2),
+                    endB.toFixed(2)
+                ];
+
+                let runningBalance = startB;
+                (row.monthly_details || []).forEach((m, idx) => {
+                    const mCharge = m.charge || 0;
+                    const mPay = m.payment || 0;
+                    runningBalance = runningBalance - mCharge + mPay;
+
+                    if (monthTotals[idx]) {
+                        monthTotals[idx].charge += mCharge;
+                        monthTotals[idx].payment += mPay;
+                        monthTotals[idx].endBal += runningBalance;
+                    }
+
+                    csvRow.push(
+                        mCharge.toFixed(2),
+                        mPay.toFixed(2),
+                        runningBalance.toFixed(2)
+                    );
+                });
+
+                csv.push(csvRow.join(';'));
+            });
+
+            // Summary Totals row
+            let totalsRow = [
+                'ЗАГАЛОМ',
+                '',
+                totStart.toFixed(2),
+                totCharge.toFixed(2),
+                totPaid.toFixed(2),
+                totEnd.toFixed(2)
+            ];
+            monthTotals.forEach(mt => {
+                totalsRow.push(
+                    mt.charge.toFixed(2),
+                    mt.payment.toFixed(2),
+                    mt.endBal.toFixed(2)
+                );
+            });
+            csv.push(totalsRow.join(';'));
         }
 
-        // Body
-        data.forEach(row => {
-            let csvRow = [row.apartment_number, `"${row.owner_name || ''}"`, row.start_balance.toFixed(2)];
-
-            if (isSingleMonth) {
-                const m = row.monthly_details[0];
-                csvRow.push(
-                    m.maintenance_fee.toFixed(2),
-                    m.lift_fee.toFixed(2),
-                    m.gas_fee.toFixed(2),
-                    m.adjustment.toFixed(2),
-                    m.charge.toFixed(2),
-                    m.payment.toFixed(2),
-                    row.end_balance.toFixed(2)
-                );
-            } else {
-                let runningBalance = row.start_balance;
-                row.monthly_details.forEach(m => {
-                    runningBalance = runningBalance - m.charge + m.payment;
-                    if (state.expandedMonth === m.period) {
-                        csvRow.push(
-                            m.maintenance_fee.toFixed(2),
-                            m.lift_fee.toFixed(2),
-                            m.gas_fee.toFixed(2),
-                            m.adjustment.toFixed(2),
-                            m.payment.toFixed(2),
-                            runningBalance.toFixed(2)
-                        );
-                    } else {
-                        csvRow.push(runningBalance.toFixed(2));
-                    }
-                });
-                csvRow.push(row.end_balance.toFixed(2));
-            }
-            csv.push(csvRow.join(';'));
-        });
-
-        downloadCSV(csv.join('\n'), `Report_${state.startPeriod}_${state.endPeriod}.csv`);
+        downloadCSV(csv.join('\n'), `Report_${startPeriod}_${endPeriod}.csv`);
     } catch (err) {
         console.error(err);
         alert('Помилка при експорті: ' + err.message);
@@ -2290,37 +2860,47 @@ async function exportMainReport() {
 
 async function exportApartmentHistory(aptId, aptNum) {
     try {
+        const startPeriod = (state.startDate || '2026-01-01').substring(0, 7);
+        const endPeriod = (state.endDate || '2026-12-31').substring(0, 7);
+
         const res = await fetch(`${API_BASE}/charges/report`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                start_period: state.startPeriod,
-                end_period: state.endPeriod
+                start_period: startPeriod,
+                end_period: endPeriod
             })
         });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || `Помилка сервера: ${res.status}`);
+        }
         const data = await res.json();
         const row = data.find(r => r.apartment_id === aptId);
         if (!row) return alert('Квартиру не знайдено');
 
-        let csv = [['Місяць', 'Debt на поч.', 'Утримання', 'Ліфт', 'Газ', 'Корегув.', 'Сплачено', 'Debt на кін.'].join(';')];
-        let rb = row.start_balance;
+        let csv = [['Місяць', 'Борг на початок', 'Квартплата', 'Ліфт', 'Газ', 'Коригування', 'Нараховано загалом', 'Сплачено', 'Борг на кінець'].join(';')];
+        let rb = typeof row.start_balance === 'number' ? row.start_balance : 0;
 
-        row.monthly_details.forEach(m => {
+        (row.monthly_details || []).forEach(m => {
             const startB = rb;
-            rb = rb - m.charge + m.payment;
+            const charge = m.charge || 0;
+            const payment = m.payment || 0;
+            rb = rb - charge + payment;
             csv.push([
-                m.period,
+                formatPeriod(m.period),
                 startB.toFixed(2),
-                m.maintenance_fee.toFixed(2),
-                m.lift_fee.toFixed(2),
-                m.gas_fee.toFixed(2),
-                m.adjustment.toFixed(2),
-                m.payment.toFixed(2),
+                (m.maintenance_fee || 0).toFixed(2),
+                (m.lift_fee || 0).toFixed(2),
+                (m.gas_fee || 0).toFixed(2),
+                (m.adjustment || 0).toFixed(2),
+                charge.toFixed(2),
+                payment.toFixed(2),
                 rb.toFixed(2)
             ].join(';'));
         });
 
-        downloadCSV(csv.join('\n'), `History_Apt_${aptNum}_${state.startPeriod}_${state.endPeriod}.csv`);
+        downloadCSV(csv.join('\n'), `History_Apt_${aptNum}_${startPeriod}_${endPeriod}.csv`);
     } catch (err) {
         console.error(err);
         alert('Помилка при експорті історії: ' + err.message);
@@ -2339,6 +2919,314 @@ function downloadCSV(csvContent, filename) {
     link.click();
     document.body.removeChild(link);
 }
+
+async function printChargesReport() {
+    const btn = document.getElementById('btn-print-charges') || document.getElementById('btn-export-pdf');
+    const originalBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Підготовка...';
+    }
+
+    try {
+        const startPeriod = (state.startDate || '2026-01-01').substring(0, 7);
+        const endPeriod = (state.endDate || '2026-12-31').substring(0, 7);
+
+        // Ensure report data is loaded
+        let data = state.currentReportData;
+        if (!data || data.length === 0) {
+            const res = await fetch(`${API_BASE}/charges/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_period: startPeriod, end_period: endPeriod })
+            });
+            if (!res.ok) throw new Error('Не вдалося отримати дані звітів');
+            const rawData = await res.json();
+            data = normalizeReportData(rawData);
+            state.currentReportData = data;
+        }
+
+        if (!data || data.length === 0) {
+            alert('Немає даних для друку');
+            return;
+        }
+
+        // Determine which apartments are currently expanded in detail mode
+        const expandedRows = Array.from(document.querySelectorAll('.history-row')).filter(r => r.style.display !== 'none');
+        let expandedAptIds = expandedRows.map(r => parseInt(r.id.replace('history-', ''))).filter(Boolean);
+
+        if (currentUser && currentUser.role === 'resident' && currentUser.apartment_id) {
+            if (!expandedAptIds.includes(currentUser.apartment_id)) {
+                expandedAptIds = [currentUser.apartment_id];
+            }
+        }
+
+        const formatDateStr = (dStr) => {
+            if (!dStr) return '';
+            const p = dStr.split('-');
+            return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : dStr;
+        };
+        const periodLabel = `${formatDateStr(state.startDate)} – ${formatDateStr(state.endDate)}`;
+
+        let html = '';
+        let docTitle = '';
+        const orientation = 'landscape';
+
+        if (expandedAptIds.length === 0) {
+            // ── Case 1: No apartment expanded -> General Table ──
+            const months = (data[0].monthly_details || []).map(m => m.period);
+            const isSingleMonth = months.length === 1;
+            docTitle = `Zvit_Zagalnyi_${startPeriod}_${endPeriod}`;
+
+            let theadHtml = '';
+            let rowsHtml = '';
+            let tfootHtml = '';
+
+            if (isSingleMonth) {
+                theadHtml = `
+                    <tr>
+                        <th style="width:7%">№ кв.</th>
+                        <th style="width:23%">П.І.Б.</th>
+                        <th class="text-right" style="width:10%">Борг на поч.</th>
+                        <th class="text-right" style="width:10%">Квартплата</th>
+                        <th class="text-right" style="width:8%">Ліфт</th>
+                        <th class="text-right" style="width:8%">Газ</th>
+                        <th class="text-right" style="width:8%">Коригув.</th>
+                        <th class="text-right" style="width:12%">Нараховано</th>
+                        <th class="text-right" style="width:12%">Сплачено</th>
+                        <th class="text-right" style="width:12%">Борг на кін.</th>
+                    </tr>`;
+
+                let totStart = 0, totMaint = 0, totLift = 0, totGas = 0, totAdj = 0, totCharge = 0, totPaid = 0, totEnd = 0;
+                rowsHtml = data.map(item => {
+                    const md = (item.monthly_details && item.monthly_details[0]) || {};
+                    totStart += md.start_balance || 0;
+                    totMaint += md.maintenance || 0;
+                    totLift += md.lift || 0;
+                    totGas += md.gas || 0;
+                    totAdj += md.adjustment || 0;
+                    totCharge += md.total_charged || 0;
+                    totPaid += md.paid || 0;
+                    totEnd += md.end_balance || 0;
+
+                    return `
+                        <tr>
+                            <td><b>${item.apartment.number}</b></td>
+                            <td>${item.apartment.owner_name || '—'}</td>
+                            <td class="text-right">${formatCurrency(md.start_balance)}</td>
+                            <td class="text-right">${formatCurrency(md.maintenance)}</td>
+                            <td class="text-right">${formatCurrency(md.lift)}</td>
+                            <td class="text-right">${formatCurrency(md.gas)}</td>
+                            <td class="text-right">${formatCurrency(md.adjustment)}</td>
+                            <td class="text-right"><b>${formatCurrency(md.total_charged)}</b></td>
+                            <td class="text-right">${formatCurrency(md.paid)}</td>
+                            <td class="text-right"><b>${formatCurrency(md.end_balance)}</b></td>
+                        </tr>`;
+                }).join('');
+
+                tfootHtml = `
+                    <tr class="charges-total-row">
+                        <td colspan="2"><b>ЗАГАЛОМ:</b></td>
+                        <td class="text-right"><b>${formatCurrency(totStart)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totMaint)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totLift)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totGas)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totAdj)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totCharge)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totPaid)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totEnd)} ₴</b></td>
+                    </tr>`;
+            } else {
+                theadHtml = `
+                    <tr>
+                        <th style="width:8%">№ кв.</th>
+                        <th style="width:28%">П.І.Б.</th>
+                        <th class="text-right" style="width:16%">Борг на початок<br><small>(${formatPeriod(months[0])})</small></th>
+                        <th class="text-right" style="width:16%">Нараховано загалом<br><small>(За період)</small></th>
+                        <th class="text-right" style="width:16%">Сплачено<br><small>(За період)</small></th>
+                        <th class="text-right" style="width:16%">Борг на кінець<br><small>(${formatPeriod(months[months.length - 1])})</small></th>
+                    </tr>`;
+
+                let totStart = 0, totCharge = 0, totPaid = 0, totEnd = 0;
+                rowsHtml = data.map(item => {
+                    const s = item.summary || {};
+                    totStart += s.start_balance || 0;
+                    totCharge += s.total_charged || 0;
+                    totPaid += s.total_paid || 0;
+                    totEnd += s.end_balance || 0;
+
+                    return `
+                        <tr>
+                            <td><b>${item.apartment.number}</b></td>
+                            <td>${item.apartment.owner_name || '—'}</td>
+                            <td class="text-right">${formatCurrency(s.start_balance)}</td>
+                            <td class="text-right">${formatCurrency(s.total_charged)}</td>
+                            <td class="text-right">${formatCurrency(s.total_paid)}</td>
+                            <td class="text-right"><b>${formatCurrency(s.end_balance)}</b></td>
+                        </tr>`;
+                }).join('');
+
+                tfootHtml = `
+                    <tr class="charges-total-row">
+                        <td colspan="2"><b>ЗАГАЛОМ:</b></td>
+                        <td class="text-right"><b>${formatCurrency(totStart)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totCharge)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totPaid)} ₴</b></td>
+                        <td class="text-right"><b>${formatCurrency(totEnd)} ₴</b></td>
+                    </tr>`;
+            }
+
+            html = `
+                <div class="charges-print-container">
+                    <div class="charges-print-header">
+                        <div class="charges-print-org">ЖБК № 102 «Заполярье»</div>
+                        <h2 class="charges-print-title">ЗВІТ ПРО НАРАХУВАННЯ ТА ОПЛАТИ</h2>
+                        <div class="charges-print-subtitle">Період: ${periodLabel}</div>
+                    </div>
+                    <table class="charges-print-table">
+                        <thead>${theadHtml}</thead>
+                        <tbody>${rowsHtml}</tbody>
+                        <tfoot>${tfootHtml}</tfoot>
+                    </table>
+                </div>`;
+
+        } else {
+            // ── Cases 2 & 3: One or Multiple Apartments in Detail Mode ──
+            const targetItems = data
+                .filter(d => expandedAptIds.includes(d.apartment.id))
+                .sort((a, b) => {
+                    const numA = parseInt(String(a.apartment.number).replace(/\D/g, '')) || 0;
+                    const numB = parseInt(String(b.apartment.number).replace(/\D/g, '')) || 0;
+                    return numA - numB;
+                });
+
+            if (targetItems.length === 0) {
+                alert('Не знайдено даних для розгорнутих квартир');
+                return;
+            }
+
+            if (targetItems.length === 1) {
+                docTitle = `Kvartyra_${targetItems[0].apartment.number}_${startPeriod}_${endPeriod}`;
+            } else {
+                docTitle = `Kvartyry_Detalizatsiya_${startPeriod}_${endPeriod}`;
+            }
+
+            const cardsHtml = targetItems.map((item, idx) => {
+                let totMaint = 0, totLift = 0, totGas = 0, totAdj = 0, totCharge = 0, totPaid = 0;
+                const rows = (item.monthly_details || []).map(md => {
+                    totMaint += md.maintenance || 0;
+                    totLift += md.lift || 0;
+                    totGas += md.gas || 0;
+                    totAdj += md.adjustment || 0;
+                    totCharge += md.total_charged || 0;
+                    totPaid += md.paid || 0;
+
+                    return `
+                        <tr>
+                            <td><b>${formatPeriod(md.period)}</b></td>
+                            <td class="text-right">${formatCurrency(md.start_balance)}</td>
+                            <td class="text-right">${formatCurrency(md.maintenance)}</td>
+                            <td class="text-right">${formatCurrency(md.lift)}</td>
+                            <td class="text-right">${formatCurrency(md.gas)}</td>
+                            <td class="text-right">${formatCurrency(md.adjustment)}</td>
+                            <td class="text-right"><b>${formatCurrency(md.total_charged)}</b></td>
+                            <td class="text-right">${formatCurrency(md.paid)}</td>
+                            <td class="text-right"><b>${formatCurrency(md.end_balance)}</b></td>
+                        </tr>`;
+                }).join('');
+
+                const sum = item.summary || {};
+                const dividerClass = idx < targetItems.length - 1 ? 'charges-print-divider' : '';
+
+                return `
+                    <div class="charges-print-card ${dividerClass}">
+                        <div class="charges-print-header" style="margin-bottom: 3mm;">
+                            <div class="charges-print-org">ЖБК № 102 «Заполярье»</div>
+                            <h2 class="charges-print-title" style="font-size: 13pt; margin: 1mm 0;">ДЕТАЛІЗАЦІЯ НАРАХУВАНЬ ТА ОПЛАТ: КВАРТИРА № ${item.apartment.number}</h2>
+                            <div class="charges-print-subtitle">Період: ${periodLabel}</div>
+                        </div>
+                        <div class="charges-print-info-bar">
+                            <span><b>Власник:</b> ${item.apartment.owner_name || '—'}</span>
+                            <span><b>Площа:</b> ${item.apartment.area_m2 ? item.apartment.area_m2 + ' м²' : '—'}</span>
+                            ${item.apartment.email ? `<span><b>Email:</b> ${item.apartment.email}</span>` : ''}
+                        </div>
+                        <table class="charges-print-table">
+                            <thead>
+                                <tr>
+                                    <th>Місяць</th>
+                                    <th class="text-right">Борг на поч.</th>
+                                    <th class="text-right">Квартплата</th>
+                                    <th class="text-right">Ліфт</th>
+                                    <th class="text-right">Газ</th>
+                                    <th class="text-right">Коригування</th>
+                                    <th class="text-right">Нараховано</th>
+                                    <th class="text-right">Сплачено</th>
+                                    <th class="text-right">Борг на кін.</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                            <tfoot>
+                                <tr class="charges-total-row">
+                                    <td><b>ЗАГАЛОМ:</b></td>
+                                    <td class="text-right"><b>${formatCurrency(sum.start_balance || 0)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(totMaint)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(totLift)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(totGas)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(totAdj)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(sum.total_charged || totCharge)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(sum.total_paid || totPaid)} ₴</b></td>
+                                    <td class="text-right"><b>${formatCurrency(sum.end_balance || 0)} ₴</b></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>`;
+            }).join('');
+
+            html = `<div class="charges-print-container">${cardsHtml}</div>`;
+        }
+
+        // Setup global print area for window.print()
+        const oldPrint = document.getElementById('global-print-area');
+        if (oldPrint) oldPrint.remove();
+
+        const globalPrintArea = document.createElement('div');
+        globalPrintArea.id = 'global-print-area';
+        globalPrintArea.className = 'print-container';
+        globalPrintArea.innerHTML = html;
+        document.body.appendChild(globalPrintArea);
+
+        // Inject dynamic page orientation style
+        let pageStyle = document.getElementById('dynamic-print-page-style');
+        if (!pageStyle) {
+            pageStyle = document.createElement('style');
+            pageStyle.id = 'dynamic-print-page-style';
+            document.head.appendChild(pageStyle);
+        }
+        pageStyle.textContent = `@media print { @page { size: A4 ${orientation}; margin: 8mm 10mm; } }`;
+
+        const prevTitle = document.title;
+        document.title = docTitle;
+
+        // Trigger native browser print
+        window.print();
+
+        // Restore document title and cleanup style
+        setTimeout(() => {
+            document.title = prevTitle;
+            if (pageStyle) pageStyle.remove();
+        }, 2000);
+
+    } catch (err) {
+        console.error('Print error:', err);
+        alert('Помилка при підготовці до друку: ' + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+        }
+    }
+}
+window.exportChargesPDF = printChargesReport;
 
 async function recalculateAll() {
     const btn = document.getElementById('btn-recalculate');
@@ -2397,9 +3285,743 @@ function updateGlobalUI() {
     }
 }
 
-// Reports
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Reports Page (Звіти) & PDF Archive ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
 async function renderReports() {
-    pageTitle.innerText = 'Друк';
+    try {
+        pageTitle.innerText = window.t ? window.t('Reports') : 'Звіти';
+
+        const res = await fetch(`${API_BASE}/dashboard/stats?start_date=${state.startDate}&end_date=${state.endDate}`);
+        const data = await res.json();
+        state.dashboardData = data;
+
+        // Fetch PDF documents
+        let docs = [];
+        try {
+            const docsRes = await fetch(`${API_BASE}/reports/documents`);
+            if (docsRes.ok) {
+                docs = await docsRes.json();
+            }
+        } catch(e) {
+            console.error('Error fetching report documents:', e);
+        }
+
+        // Debtors rows & totals
+        const isEn = (window.currentLang === 'en');
+        let topDebtors = [];
+        let otherDebt = 0;
+        if (data.debtors && data.debtors.length > 0) {
+            const sorted = [...data.debtors].sort((a, b) => b.debt - a.debt);
+            topDebtors = sorted.slice(0, 10);
+            for (let i = 10; i < sorted.length; i++) {
+                otherDebt += sorted[i].debt;
+            }
+        }
+        let debtorsRowsHtml = topDebtors.map((d) =>
+            `<tr><td>${isEn ? 'Apt.' : 'Кв.'} ${d.apartment || d.apt_number}</td><td>${d.owner}</td><td class="text-right color-danger">${formatCurrency(d.debt)} ₴</td></tr>`
+        ).join('');
+        if (otherDebt > 0) {
+            debtorsRowsHtml += `<tr class="total-row"><td>${window.t ? window.t('Other') : 'Інші'}</td><td>—</td><td class="text-right color-danger">${formatCurrency(otherDebt)} ₴</td></tr>`;
+        }
+
+        // Expense breakdown HTML
+        const ebRows = (data.expense_breakdown || []).map(e =>
+            `<tr><td>${e.group}</td><td class="text-right">${e.pct}%</td><td class="text-right color-danger">${formatCurrency(e.amount)}</td></tr>`
+        ).join('');
+        const ebTotal = (data.expense_breakdown || []).reduce((s, e) => s + e.amount, 0);
+
+        // PDF docs rows
+        const isAdmin = currentUser && currentUser.role === 'admin';
+        const docRowsHtml = docs.length > 0 ? docs.map(doc => {
+            let badgeCls = 'doc-badge-annual';
+            let badgeLabel = doc.period || (isEn ? 'Annual Report' : 'Річний звіт');
+            if (doc.period === 'Акт ревізії') {
+                badgeCls = 'doc-badge-audit';
+                badgeLabel = isEn ? 'Audit Act' : 'Акт ревізії';
+            } else if (doc.period === 'Кошторис') {
+                badgeCls = 'doc-badge-budget';
+                badgeLabel = isEn ? 'Budget Estimate' : 'Кошторис';
+            }
+            
+            const sizeStr = doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : '—';
+            const dateStr = doc.created_at ? doc.created_at.substring(0, 10) : '—';
+            
+            return `
+            <tr>
+                <td style="font-weight: 600; text-align: center;">${doc.year}</td>
+                <td><span class="doc-badge ${badgeCls}">${badgeLabel}</span></td>
+                <td>
+                    <div style="font-weight: 600; color: var(--text-primary);">${doc.title}</div>
+                    ${doc.note ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">${doc.note}</div>` : ''}
+                </td>
+                <td style="font-size: 0.85rem; color: var(--text-secondary);">${sizeStr}</td>
+                <td style="font-size: 0.85rem; color: var(--text-secondary);">${dateStr}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                    <button class="btn btn-sm btn-primary" onclick="window.openPdfViewerModal(${doc.id}, '${(doc.title||'').replace(/'/g, "\\'")}')" style="padding: 4px 10px; font-size: 0.8rem; border-radius: 6px; margin-right: 6px;">
+                        <i class="fas fa-eye"></i> ${window.t ? window.t('View') : 'Переглянути'}
+                    </button>
+                    <a class="btn btn-sm btn-secondary" href="/api/reports/documents/${doc.id}/download" download="${doc.filename}" style="padding: 4px 10px; font-size: 0.8rem; border-radius: 6px; margin-right: 6px;">
+                        <i class="fas fa-download"></i> ${window.t ? window.t('Download') : 'Завантажити'}
+                    </a>
+                    ${isAdmin ? `
+                    <button class="btn btn-sm btn-secondary" onclick="window.deleteReportDocument(${doc.id})" title="${window.t ? window.t('Delete') : 'Видалити'}" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 6px; color: #ef4444;" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background=''">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>` : ''}
+                </td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 2rem;">${window.t ? window.t('No uploaded reports in the system.') : 'Немає завантажених звітів у системі.'}</td></tr>`;
+
+        // ── Balance table HTML ──
+        const bt = data.balance_table || { headers: [], rows: [], grand_total: { label: 'Всього', values: [] }, balance_row: { label: 'Залишок на кінець', values: [] } };
+        const btHeaders = (bt.headers || []).map(h => `<th>${window.t ? window.t(h) : h}</th>`).join('');
+        const btRows = (bt.rows || []).map(r => {
+            const valCells = (r.values || []).map((v, i) => {
+                const formattedVal = formatCurrency(v);
+                const isGrandTotal = (i === r.values.length - 1);
+                const monthVal = isGrandTotal ? '' : data.months[i];
+                const tooltipText = isGrandTotal 
+                    ? (isEn ? 'Double click: show transactions for the whole period' : 'Подвійний клік: показати транзакції за весь період')
+                    : (isEn ? `Double click: show transactions for ${data.labels[i]}` : `Подвійний клік: показати транзакції за ${data.labels[i]}`);
+                
+                return `<td class="text-right ${v < 0 ? 'color-danger' : ''}" 
+                            style="cursor: pointer; transition: background 0.2s;" 
+                            title="${tooltipText}" 
+                            onmouseover="this.style.background='rgba(56,189,248,0.1)'" 
+                            onmouseout="this.style.background=''" 
+                            ondblclick="window.goToTransactionsFilter('${r.label}', '', '', '${monthVal}')">${formattedVal}</td>`;
+            }).join('');
+            const rowLabel = window.t ? window.t(r.label) : r.label;
+            return `<tr><td>${rowLabel}</td>${valCells}</tr>`;
+        }).join('');
+        const btGrandLabel = bt.grand_total ? (window.t ? window.t(bt.grand_total.label) : bt.grand_total.label) : '';
+        const btGrandRow = bt.grand_total ? `<tr class="total-row"><td>${btGrandLabel}</td>${(bt.grand_total.values || []).map(v => `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${formatCurrency(v)}</td>`).join('')}</tr>` : '';
+        const btBalLabel = bt.balance_row ? (window.t ? window.t(bt.balance_row.label) : bt.balance_row.label) : '';
+        const btBalanceRow = bt.balance_row ? `<tr style="background:rgba(56,189,248,0.08)"><td style="font-weight:600">${btBalLabel}</td>${(bt.balance_row.values || []).map(v => `<td class="text-right" style="font-weight:600">${formatCurrency(v)}</td>`).join('')}</tr>` : '';
+
+        // ── Detail table HTML ──
+        const detailHeaders = [
+            window.t ? window.t('Type') : 'Тип',
+            window.t ? window.t('Group') : 'Група',
+            window.t ? window.t('Purpose') : 'Призначення'
+        ].concat((data.labels || []).map(l => {
+            const parts = l.split(' ');
+            return parts.length === 2 ? formatPeriod(`${parts[1]}-${parts[0]}`) || l : l;
+        })).concat([window.t ? window.t('Total') : 'Всього']);
+        const detailHeadersHtml = detailHeaders.map(h => `<th>${h}</th>`).join('');
+        const detailRowsHtml = (data.detail_rows || []).map(r => {
+            let cls = '';
+            if (r.level === 'grand_total') cls = 'total-row';
+            else if (r.level === 'type_total') cls = 'total-row';
+            else if (r.level === 'group_total') cls = 'subtotal-row';
+            
+            const valCells = (r.values || []).map((v, i) => {
+                const formattedVal = v !== 0 ? formatCurrency(v) : '';
+                if (r.level === 'item' && v !== 0) {
+                    const isGrandTotal = (i === r.values.length - 1);
+                    const monthVal = isGrandTotal ? '' : data.months[i];
+                    const tooltipText = isGrandTotal 
+                        ? (isEn ? 'Double click: show transactions for the whole period' : 'Подвійний клік: показати транзакції за весь період')
+                        : (isEn ? `Double click: show transactions for ${data.labels[i]}` : `Подвійний клік: показати транзакції за ${data.labels[i]}`);
+                    
+                    return `<td class="text-right ${v < 0 ? 'color-danger' : ''}" 
+                                style="cursor: pointer; transition: background 0.2s;" 
+                                title="${tooltipText}" 
+                                onmouseover="this.style.background='rgba(56,189,248,0.1)'" 
+                                onmouseout="this.style.background=''" 
+                                ondblclick="window.goToTransactionsFilter('${r.type}', '${r.group}', '${r.purpose}', '${monthVal}')">${formattedVal}</td>`;
+                }
+                return `<td class="text-right ${v < 0 ? 'color-danger' : ''}">${formattedVal}</td>`;
+            }).join('');
+            
+            return `<tr class="${cls}"><td>${r.type}</td><td>${r.group}</td><td>${r.purpose}</td>${valCells}</tr>`;
+        }).join('');
+
+        contentArea.innerHTML = `
+            <div id="reports-grid" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Top Stats Block -->
+                <div class="dash-card" id="dash-stats" style="overflow: hidden; min-height: 100px;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-title">${window.t ? window.t('Beginning Balance') : 'Початковий баланс'}</div>
+                            <div class="value ${data.totals.start_balance < 0 ? 'color-danger' : 'color-success'}">
+                                ${formatCurrency(data.totals.start_balance)} ₴
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-title">${window.t ? window.t('Inflow') : 'Надходження'}</div>
+                            <div class="value color-success">
+                                + ${formatCurrency(data.totals.inflow)} ₴
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-title">${window.t ? window.t('Expenses') : 'Витрати'}</div>
+                            <div class="value color-danger">
+                                - ${formatCurrency(data.totals.expenses)} ₴
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card-title">${window.t ? window.t('Ending Balance') : 'Кінцевий баланс'}</div>
+                            <div class="value ${data.totals.balance < 0 ? 'color-danger' : 'color-success'}">
+                                ${formatCurrency(data.totals.balance)} ₴
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actual Balance Historical Chart with Cash Flows -->
+                <div class="chart-container dash-card" id="reports-chart-card" style="overflow: hidden; min-height: 320px; display: flex; flex-direction: column; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;">
+                        <h3 class="dash-section-title" style="margin: 0;"><i class="fas fa-chart-line" style="color: var(--accent-color);"></i> ${window.t ? window.t('HOA Balance & Cash Flows') : 'Баланс та грошові потоки ЖБК'}</h3>
+                        <div style="display: flex; align-items: center; gap: 12px; font-size: 0.8rem; color: var(--text-secondary); flex-wrap: wrap;">
+                            <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></span> ${window.t ? window.t('Income (upward)') : 'Надходження (угору)'}</span>
+                            <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></span> ${window.t ? window.t('Expenses (below zero)') : 'Витрати (нижче нуля)'}</span>
+                            <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 14px; height: 3px; background: #38bdf8; border-radius: 2px;"></span> ${window.t ? window.t('Balance (funds on hand)') : 'Баланс (залишок коштів)'}</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content" style="flex-grow: 1; display: flex; flex-direction: column;">
+                        <div style="flex-grow: 1; min-height: 260px; position: relative;">
+                            <canvas id="reportsActualChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debtors and Expenses Breakdown -->
+                <div id="dash-tables-row" class="dashboard-tables-grid" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; align-items: stretch;">
+                    <div class="dash-table-card dash-card" id="dash-debtors" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
+                        <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
+                            <span class="dash-section-title">${window.t ? window.t('Debtors (TOP-10)') : 'Боржники (ТОП-10)'}
+                                <small style="font-weight:400; font-size:0.75rem; color:var(--text-secondary); margin-left:0.5rem;">${isEn ? 'as of' : 'станом на'} ${data.debtors_date ? (() => { const p=data.debtors_date.split('-'); return p[2]+'.'+p[1]+'.'+p[0]; })() : state.endDate}</small>
+                            </span>
+                            <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
+                        </h3>
+                        <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
+                            <div style="flex:1; min-width:200px; height:250px">
+                                <canvas id="reportsDebtChart"></canvas>
+                            </div>
+                            <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
+                                <table style="width:100%">
+                                    <thead><tr><th>${window.t ? window.t('Apartment') : 'Квартира'}</th><th>${window.t ? window.t('Owner') : 'Власник'}</th><th class="text-right">${window.t ? window.t('Debt') : 'Борг'}</th></tr></thead>
+                                    <tbody>
+                                        ${debtorsRowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dash-table-card dash-card" id="dash-expenses" style="width: calc(50% - 0.75rem); min-width:400px; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; flex-grow: 1;">
+                        <h3 style="display:flex; justify-content:space-between; align-items:center;" data-collapsible="true">
+                            <span class="dash-section-title">${window.t ? window.t('Expenses: Structure') : 'Витрати: Структура'}</span>
+                            <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
+                        </h3>
+                        <div class="collapsible-content" style="display:flex; flex-direction:row; align-items:flex-start; gap:1.5rem; flex-wrap:wrap; flex-grow: 1; overflow-y: auto; overflow-x: auto;">
+                            <div style="flex:1; min-width:200px; height:250px">
+                                <canvas id="reportsExpensesPieChart"></canvas>
+                            </div>
+                            <div style="flex:1.5; min-width:250px; max-height:100%; overflow-y:auto; overflow-x:auto; font-size:0.85rem;">
+                                <table style="width:100%">
+                                    <thead><tr><th>${window.t ? window.t('Group') : 'Група'}</th><th class="text-right">%</th><th class="text-right">${window.t ? window.t('Amount') : 'Сума'}</th></tr></thead>
+                                    <tbody>
+                                        ${ebRows}
+                                        <tr class="total-row"><td>${window.t ? window.t('Total') : 'Всього'}</td><td class="text-right">100%</td><td class="text-right color-danger">${formatCurrency(ebTotal)}</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Balance & Details Table (Розкрита деталізація) -->
+                <div class="dash-table-card dash-card" id="reports-balance" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column; width: 100%; padding: 1.5rem;">
+                    <h3 style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;" data-collapsible="true">
+                        <span class="dash-section-title"><i class="fas fa-table" style="color: var(--accent-color);"></i> ${window.t ? window.t('Income & Expense Balance (Monthly)') : 'Баланс доходів та витрат (Помісячно)'}</span>
+                        <div>
+                            <button id="reports-toggle-details-btn" class="section-toggle-btn" style="margin-right:0.75rem;" onclick="window.toggleReportsDetailsTable(event)">
+                                <i class="fas fa-minus"></i> ${window.t ? window.t('Hide details') : 'Сховати деталізацію'}
+                            </button>
+                            <i class="fas fa-chevron-up toggle-icon" style="cursor:pointer; transition:transform 0.3s;" onclick="toggleCard(this)"></i>
+                        </div>
+                    </h3>
+                    <div class="collapsible-content" style="flex-grow: 1; overflow-y: auto;">
+                        <div style="overflow-x:auto">
+                            <table style="margin-bottom:1.5rem; width: 100%;">
+                                <thead><tr>${btHeaders}</tr></thead>
+                                <tbody>${btRows}${btGrandRow}${btBalanceRow}</tbody>
+                            </table>
+                        </div>
+                        <div id="reports-details-table-container" style="display:block; overflow-x:auto; margin-top:1.5rem; border-top:1px solid rgba(255,255,255,0.1); padding-top:1.25rem;">
+                            <h4 style="margin-bottom:1rem; color:var(--text-primary); font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-list-ul" style="color: var(--accent-color);"></i> ${window.t ? window.t('Detailed Line-Item Breakdown') : 'Повна деталізація за статтями'}
+                            </h4>
+                            <table style="width: 100%;">
+                                <thead><tr>${detailHeadersHtml}</tr></thead>
+                                <tbody>${detailRowsHtml}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PDF Reports Archive Section -->
+                <div class="dash-card dash-table-card" id="reports-pdf-section" style="overflow: hidden; min-height: 200px; display: flex; flex-direction: column; width: 100%; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h3 class="dash-section-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-file-pdf" style="color: #ef4444;"></i>
+                                ${window.t ? window.t('Official HOA Reports & Audits Archive (PDF)') : 'Архів офіційних звітів та актів ЖБК (PDF)'}
+                            </h3>
+                            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px;">
+                                ${window.t ? window.t('Annual financial statements, audit commission reports, and revenue/expense budgets') : 'Річні фінансові звіти, акти ревізійної комісії та кошториси доходів і витрат'}
+                            </div>
+                        </div>
+                        <div>
+                            ${isAdmin ? `
+                            <button class="btn btn-primary btn-sm" onclick="window.showUploadReportModal()" style="border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-upload"></i> ${window.t ? window.t('Upload Report (PDF)') : 'Завантажити звіт (PDF)'}
+                            </button>` : ''}
+                        </div>
+                    </div>
+                    <div class="table-container" style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px; text-align: center;">${window.t ? window.t('Year') : 'Рік'}</th>
+                                    <th style="width: 140px;">${window.t ? window.t('Report Type') : 'Тип звіту'}</th>
+                                    <th>${window.t ? window.t('Title & Notes') : 'Назва та коментар'}</th>
+                                    <th style="width: 100px;">${window.t ? window.t('Size') : 'Розмір'}</th>
+                                    <th style="width: 120px;">${window.t ? window.t('Date') : 'Дата'}</th>
+                                    <th style="width: 210px; text-align: right;">${window.t ? window.t('Actions') : 'Дії'}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${docRowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        renderReportsCharts(data);
+
+    } catch (err) {
+        contentArea.innerHTML = `<p class="color-danger">Помилка завантаження звітів: ${err.message}</p>`;
+    }
+}
+window.renderReports = renderReports;
+
+window.toggleReportsDetailsTable = function(event) {
+    if (event) event.stopPropagation();
+    const cont = document.getElementById('reports-details-table-container');
+    const btn = document.getElementById('reports-toggle-details-btn');
+    if (!cont) return;
+    const isEn = (window.currentLang === 'en');
+    if (cont.style.display === 'none') {
+        cont.style.display = 'block';
+        if (btn) btn.innerHTML = `<i class="fas fa-minus"></i> ${isEn ? 'Hide details' : 'Сховати деталізацію'}`;
+    } else {
+        cont.style.display = 'none';
+        if (btn) btn.innerHTML = `<i class="fas fa-plus"></i> ${isEn ? 'Show details' : 'Показати деталізацію'}`;
+    }
+};
+
+function renderReportsCharts(data) {
+    if (typeof Chart === 'undefined') return;
+    const isEn = (window.currentLang === 'en');
+
+    // 1. Actual balance and cash flows chart
+    const actualCtx = document.getElementById('reportsActualChart');
+    if (actualCtx) {
+        const existingActual = Chart.getChart("reportsActualChart");
+        if (existingActual) existingActual.destroy();
+
+        const monthNamesUa = isEn
+            ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            : ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+
+        const labels = (data.months || []).map(m => {
+            const parts = m.split('-');
+            const moIdx = parseInt(parts[1]) - 1;
+            return `${monthNamesUa[moIdx]}-${parts[0].substring(2)}`;
+        });
+
+        const theme = getChartThemeColors();
+        const inflowData = data.inflow || [];
+        const expensesData = (data.expenses || []).map(v => -Math.abs(v));
+        const balanceData = data.balance || [];
+
+        const inflowLabel = isEn ? 'Inflow' : 'Надходження';
+        const expensesLabel = isEn ? 'Expenses' : 'Витрати';
+        const balanceLabel = isEn ? 'Balance' : 'Баланс';
+
+        new Chart(actualCtx, {
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: inflowLabel,
+                        data: inflowData,
+                        backgroundColor: theme.isLight ? '#16a34a' : '#10b981',
+                        borderRadius: 4,
+                        order: 2,
+                        barPercentage: 0.6
+                    },
+                    {
+                        type: 'bar',
+                        label: expensesLabel,
+                        data: expensesData,
+                        backgroundColor: theme.isLight ? '#dc2626' : '#ef4444',
+                        borderRadius: 4,
+                        order: 2,
+                        barPercentage: 0.6
+                    },
+                    {
+                        type: 'line',
+                        label: balanceLabel,
+                        data: balanceData,
+                        borderColor: theme.isLight ? '#0284c7' : '#38bdf8',
+                        backgroundColor: theme.isLight ? 'rgba(2, 132, 199, 0.08)' : 'rgba(56, 189, 248, 0.08)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: theme.isLight ? '#0284c7' : '#38bdf8',
+                        pointHoverRadius: 6,
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const val = ctx.raw;
+                                if (ctx.dataset.label === expensesLabel || ctx.dataset.label === 'Витрати' || ctx.dataset.label === 'Expenses') {
+                                    return `${expensesLabel}: -${formatCurrency(Math.abs(val))} ₴`;
+                                } else if (ctx.dataset.label === inflowLabel || ctx.dataset.label === 'Надходження' || ctx.dataset.label === 'Inflow') {
+                                    return `${inflowLabel}: +${formatCurrency(val)} ₴`;
+                                } else {
+                                    const balText = isEn ? 'Remaining funds (Balance)' : 'Залишок коштів (Баланс)';
+                                    return `${balText}: ${formatCurrency(val)} ₴`;
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: theme.gridColor },
+                        ticks: {
+                            color: theme.textColor,
+                            font: { family: "'Inter', sans-serif", size: 12, weight: '600' }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: ctx => ctx.tick.value === 0 ? theme.zeroLineColor : theme.gridColor,
+                            lineWidth: ctx => ctx.tick.value === 0 ? 1.5 : 1
+                        },
+                        ticks: {
+                            color: theme.textColor,
+                            font: { family: "'Inter', sans-serif", size: 12, weight: '600' },
+                            callback: function(v) { return formatCurrency(v) + ' ₴'; }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Debtors doughnut chart
+    const debtCtx = document.getElementById('reportsDebtChart');
+    if (debtCtx) {
+        const existingDebt = Chart.getChart("reportsDebtChart");
+        if (existingDebt) existingDebt.destroy();
+
+        const theme = getChartThemeColors();
+        const colors = theme.debtorColors;
+        let topDebtors = [];
+        let otherDebt = 0;
+        if (data.debtors && data.debtors.length > 0) {
+            const sorted = [...data.debtors].sort((a, b) => b.debt - a.debt);
+            topDebtors = sorted.slice(0, 10);
+            for (let i = 10; i < sorted.length; i++) otherDebt += sorted[i].debt;
+        }
+        const aptPrefix = isEn ? 'Apt.' : 'Кв.';
+        const otherText = isEn ? 'Other' : 'Інші';
+        const pieLabels = topDebtors.map(d => `${aptPrefix} ${d.apartment || d.apt_number} - ${d.owner} (${formatCurrency(d.debt)} ₴)`);
+        const pieData = topDebtors.map(d => d.debt);
+        if (otherDebt > 0) {
+            pieLabels.push(otherText);
+            pieData.push(otherDebt);
+        }
+
+        if (pieData.length > 0) {
+            new Chart(debtCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieData,
+                        backgroundColor: colors.slice(0, pieLabels.length),
+                        borderWidth: theme.isLight ? 2 : 1,
+                        borderColor: theme.sliceBorder
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '65%'
+                }
+            });
+        }
+    }
+
+    // 3. Expenses pie chart
+    const expCtx = document.getElementById('reportsExpensesPieChart');
+    if (expCtx && data.expense_breakdown && data.expense_breakdown.length > 0) {
+        const existingExp = Chart.getChart("reportsExpensesPieChart");
+        if (existingExp) existingExp.destroy();
+
+        const theme = getChartThemeColors();
+        const expColors = theme.expenseColors;
+        new Chart(expCtx, {
+            type: 'pie',
+            data: {
+                labels: data.expense_breakdown.map(e => `${e.group} (${e.pct}%)`),
+                datasets: [{
+                    data: data.expense_breakdown.map(e => e.amount),
+                    backgroundColor: expColors.slice(0, data.expense_breakdown.length),
+                    borderWidth: theme.isLight ? 2 : 1,
+                    borderColor: theme.sliceBorder
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── PDF Modals & Document Management ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+window.openPdfViewerModal = function(docId, docTitle) {
+    const modal = document.getElementById('pdf-viewer-modal');
+    const titleEl = document.getElementById('pdf-viewer-title');
+    const frame = document.getElementById('pdf-viewer-frame');
+    const downloadBtn = document.getElementById('pdf-viewer-download-btn');
+    if (!modal) return;
+    if (titleEl) titleEl.innerText = docTitle || 'Перегляд PDF';
+    if (downloadBtn) {
+        downloadBtn.href = `${API_BASE}/reports/documents/${docId}/download`;
+    }
+    if (frame) {
+        frame.src = `${API_BASE}/reports/documents/${docId}/view`;
+    }
+    modal.style.display = 'flex';
+};
+
+window.closePdfViewerModal = function() {
+    const modal = document.getElementById('pdf-viewer-modal');
+    const frame = document.getElementById('pdf-viewer-frame');
+    if (frame) frame.src = 'about:blank';
+    if (modal) modal.style.display = 'none';
+};
+
+window.showUploadReportModal = function() {
+    const m = document.getElementById('upload-report-modal');
+    if (m) m.style.display = 'flex';
+};
+
+window.closeUploadReportModal = function() {
+    const m = document.getElementById('upload-report-modal');
+    if (m) m.style.display = 'none';
+};
+
+window.handleUploadReport = async function(e) {
+    e.preventDefault();
+    const title = document.getElementById('report-form-title').value;
+    const year = document.getElementById('report-form-year').value;
+    const period = document.getElementById('report-form-period').value;
+    const note = document.getElementById('report-form-note').value;
+    const fileInput = document.getElementById('report-form-file');
+    if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Будь ласка, виберіть PDF файл');
+        return;
+    }
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('year', year);
+    formData.append('period', period);
+    formData.append('note', note);
+    formData.append('file', fileInput.files[0]);
+
+    const submitBtn = document.getElementById('btn-submit-report-upload');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Завантаження...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/reports/documents/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Помилка завантаження');
+        }
+        alert('Звіт успішно завантажено!');
+        window.closeUploadReportModal();
+        document.getElementById('upload-report-form').reset();
+        if (state.currentPage === 'reports') {
+            await renderReports();
+        }
+    } catch(err) {
+        alert(`Помилка: ${err.message}`);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-upload"></i> Завантажити';
+        }
+    }
+};
+
+window.deleteReportDocument = async function(docId) {
+    if (!confirm('Ви впевнені, що хочете видалити цей документ зі звітів?')) return;
+    try {
+        const res = await fetch(`${API_BASE}/reports/documents/${docId}`, {
+            method: 'DELETE'
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Помилка видалення');
+        }
+        alert('Документ видалено');
+        if (state.currentPage === 'reports') {
+            await renderReports();
+        }
+    } catch(err) {
+        alert(`Помилка: ${err.message}`);
+    }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Resident Payment Modal & Helpers ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+window.scrollToChargesTable = function() {
+    const el = document.getElementById('charges-report-table') || document.querySelector('.table-container');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+};
+
+window.openPaymentModal = function(amount, aptNumber, ownerName) {
+    const modal = document.getElementById('payment-modal');
+    if (!modal) return;
+    
+    const amtVal = parseFloat(amount) || 0;
+    const amountEl = document.getElementById('pay-modal-amount');
+    const aptInfoEl = document.getElementById('pay-modal-apt-info');
+    if (amountEl) amountEl.innerText = `${formatCurrency(amtVal)} ₴`;
+    if (aptInfoEl) aptInfoEl.innerText = `кв. №${aptNumber || '—'} (${ownerName || 'Власник'})`;
+    
+    // NBU QR Code Standard:
+    const purpose = `Оплата ЖКП кв ${aptNumber} ${ownerName || ''}`.trim();
+    const qrPayload = `BCD\n002\n1\nSCT\n\nЖБК 102 ЗАПОЛЯРЬЕ\nUA803052990000026005050281468\nUAH\n${amtVal.toFixed(2)}\n23025161\n\n\n${purpose}\n`;
+    
+    const qrImg = document.getElementById('pay-qr-code-img');
+    if (qrImg) {
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrPayload)}`;
+    }
+    
+    // Privat24 link
+    const privatLink = document.getElementById('pay-privat-link');
+    if (privatLink) {
+        privatLink.href = `https://next.privat24.ua/payments/form/%7B%22recipient%22%3A%2223025161%22%2C%22amount%22%3A${amtVal.toFixed(2)}%7D`;
+    }
+    
+    const purposeVal = document.getElementById('pay-purpose-val');
+    if (purposeVal) purposeVal.innerText = purpose;
+    
+    window.currentPayDetails = {
+        recipient: "ЖБК № 102 «Заполяр'є»",
+        edrpou: "23025161",
+        iban: "UA803052990000026005050281468",
+        bank: 'АТ КБ "ПРИВАТБАНК"',
+        amount: `${amtVal.toFixed(2)} ₴`,
+        purpose: purpose
+    };
+    
+    window.switchPayTab('qr');
+    modal.style.display = 'flex';
+};
+
+window.closePaymentModal = function() {
+    const modal = document.getElementById('payment-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.switchPayTab = function(tab) {
+    ['qr', 'gpay', 'iban'].forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const content = document.getElementById(`pay-tab-content-${t}`);
+        if (btn) {
+            if (t === tab) {
+                btn.classList.add('active');
+                btn.classList.remove('btn-secondary');
+            } else {
+                btn.classList.remove('active');
+                btn.classList.add('btn-secondary');
+            }
+        }
+        if (content) {
+            content.style.display = (t === tab) ? 'flex' : 'none';
+            if (t === 'iban' && tab === 'iban') content.style.display = 'block';
+        }
+    });
+};
+
+window.copyText = function(text, label) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert(`${label || 'Текст'} скопійовано в буфер обміну!`);
+        }).catch(() => {
+            prompt('Скопіюйте вручну:', text);
+        });
+    } else {
+        prompt('Скопіюйте вручну:', text);
+    }
+};
+
+window.copyPaymentDetails = function() {
+    if (!window.currentPayDetails) return;
+    const d = window.currentPayDetails;
+    const text = `Отримувач: ${d.recipient}\nЄДРПОУ: ${d.edrpou}\nIBAN: ${d.iban}\nБанк: ${d.bank}\nСума: ${d.amount}\nПризначення: ${d.purpose}`;
+    window.copyText(text, 'Реквізити платежу');
+};
+
+window.processMockGooglePay = function() {
+    const status = document.getElementById('pay-gpay-status');
+    if (status) {
+        status.innerText = 'Еквайринг LiqPay / Google Pay готовий до підключення торгового мерчанта ЖБК.';
+        status.style.display = 'block';
+    }
+};
+
+// Receipts (formerly Reports/Print)
+async function renderReceipts() {
+    pageTitle.innerText = window.t ? window.t('Receipts') : 'Квитанції';
     if (state.apartments.length === 0) await fetchApartments();
 
     let selectedApts = JSON.parse(localStorage.getItem('printSelectedApts') || '[]');
@@ -2441,7 +4063,12 @@ async function renderReports() {
 
                 <div class="stat-card">
                     <h3>📋 Список боржників</h3>
-                    <p style="color:var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Генерація списку квартир з від'ємним балансом (боргом) на поточний момент.</p>
+                    <p style="color:var(--text-secondary); margin-bottom: 0.75rem; font-size: 0.9rem;">Станом на кінець обраного періоду.</p>
+                    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem;">
+                        <label style="font-size:0.85rem; color:var(--text-secondary); white-space:nowrap;">від суми, ₴:</label>
+                        <input type="number" id="debt-threshold" value="1000" min="0" step="100"
+                            style="width:90px; padding:0.3rem 0.5rem; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-main); color:var(--text-primary); font-size:0.9rem;">
+                    </div>
                     <button class="btn btn-secondary" style="width: 100%;" onclick="renderDebtors()">Показати боржників</button>
                 </div>
             </div>
@@ -2548,31 +4175,31 @@ async function printReceipts() {
                     <div class="r-header">
                         <div style="font-weight:bold; text-align:center;">ЖБК № 102 "Заполярье"</div>
                         <div style="text-align:center; font-size:0.8em;">Р/Р UA803052990000026005050281468 ПАТ КБ "ПРИВАТБАНК"</div>
-                        <div style="text-align:center; font-size:0.8em;">МФО 305299 ОКПО 23025161</div>
+                        <div style="text-align:center; font-size:0.8em;">МФО 305299 ЄДРПОУ 23025161</div>
                     </div>
                     <hr class="r-line">
                     <div class="r-row"><span>Абонент:</span> <span><b>${owner}</b></span></div>
-                    <div class="r-row"><span>Адреса:</span> <span>вул. Михайла Грушевського, буд.14, кв <b>${apt.number}</b></span></div>
-                    <div class="r-row"><span><b>Загальна площ.м²</b></span> <span><b>${area.toFixed(2)}</b></span></div>
+                    <div class="r-row"><span>Адреса:</span> <span>вул. Михайла Грушевського, буд. 14, кв. <b>${apt.number}</b></span></div>
+                    <div class="r-row"><span><b>Загальна площа, м²</b></span> <span><b>${area.toFixed(2)}</b></span></div>
                     <hr class="r-line">
-                    <div class="r-row r-small"><span>1. За екс. витрати за 1м² з 01.01.2020</span> <span>4,40 грн.</span></div>
-                    <div class="r-row"><span><b>Ітого</b></span> <span><b>${ch.maintenance_fee.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-small"><span>1. За експл. витрати за 1 м² з 01.01.2020</span> <span>4,40 грн.</span></div>
+                    <div class="r-row"><span><b>Разом</b></span> <span><b>${ch.maintenance_fee.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
-                    <div class="r-row r-small"><span>2. За тех.обслуговування систем газопостачання<br>за 1м² з 01.01.2022</span> <span>0,47 грн.</span></div>
-                    <div class="r-row"><span><b>Ітого</b></span> <span><b>${ch.gas_fee.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-small"><span>2. За тех. обслуговування систем газопостачання<br>за 1 м² з 01.01.2022</span> <span>0,47 грн.</span></div>
+                    <div class="r-row"><span><b>Разом</b></span> <span><b>${ch.gas_fee.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
-                    <div class="r-row r-small"><span>3. За тех.обслуговування ліфтів за 1м²</span> <span>0,90 грн.</span></div>
-                    <div class="r-row"><span><b>Ітого</b></span> <span><b>${ch.lift_fee.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-small"><span>3. За тех. обслуговування ліфтів за 1 м²</span> <span>0,90 грн.</span></div>
+                    <div class="r-row"><span><b>Разом</b></span> <span><b>${ch.lift_fee.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
                     <div class="r-row"><span>Нараховано <b>${periodStr}</b></span> <span><b>${ch.total.toFixed(2)} грн.</b></span></div>
-                    <div class="r-row"><span>Корегування</span> <span>${ch.adjustment.toFixed(2)} грн.</span></div>
-                    <div class="r-row"><span><b>Debt</b> ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row"><span>Коригування</span> <span>${ch.adjustment.toFixed(2)} грн.</span></div>
+                    <div class="r-row"><span><b>Борг</b> на ${startPeriodFormatted}</span> <span><b>${startDebt.toFixed(2)} грн.</b></span></div>
                     <div class="r-row"><span><b>Сплачено</b> ${periodStr}</span> <span><b>${rep.monthly_details[0].payment.toFixed(2)} грн.</b></span></div>
-                    <div class="r-row r-total"><span><b>Debt</b> ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
+                    <div class="r-row r-total"><span><b>Борг</b> на ${endPeriodFormatted}</span> <span><b>${endDebt.toFixed(2)} грн.</b></span></div>
                     <hr class="r-line">
                     <div class="r-footer">
-                        <div>бухгалтер Олена Олександрівна тел. 098 206 0931</div>
-                        <div>приймальний день субота з 12<sup>00</sup> до 16<sup>00</sup></div>
+                        <div>Бухгалтер: Олена Олександрівна, тел. 098 206 0931</div>
+                        <div>Приймальний день: субота з 12<sup>00</sup> до 16<sup>00</sup></div>
                     </div>
                 </div>`;
             }).join('') + '</div>';
@@ -2596,56 +4223,163 @@ async function printReceipts() {
     }
 }
 
+// Debtors sort state
+let _debtorsSortCol = 'debt'; // 'apt', 'owner', 'debt'
+let _debtorsSortAsc = false;
+let _debtorsData = [];
+let _debtorsEndFormatted = '';
+
+window._sortDebtors = function(col) {
+    if (_debtorsSortCol === col) {
+        _debtorsSortAsc = !_debtorsSortAsc;
+    } else {
+        _debtorsSortCol = col;
+        _debtorsSortAsc = col === 'apt' || col === 'owner'; // asc for text cols
+    }
+    _renderDebtorsTable(
+        document.getElementById('print-preview-area'),
+        document.getElementById('btn-print-action'),
+        _debtorsEndFormatted
+    );
+};
+
 async function renderDebtors() {
     const previewArea = document.getElementById('print-preview-area');
     const printBtn = document.getElementById('btn-print-action');
     if (!previewArea) return;
 
     try {
-        previewArea.innerHTML = '<div class="loader">Loading...</div>';
-        if (state.apartments.length === 0) await fetchApartments();
+        previewArea.innerHTML = '<div class="loader">Завантаження...</div>';
 
-        const debtors = state.apartments.filter(a => (a.current_balance || 0) < 0).sort((a, b) => a.current_balance - b.current_balance);
+        // Use dashboard stats API to get period-accurate debtors
+        const res = await fetch(`${API_BASE}/dashboard/stats?start_date=${state.startDate}&end_date=${state.endDate}`);
+        if (!res.ok) throw new Error('Помилка отримання даних');
+        const data = await res.json();
 
-        const rows = debtors.map(a => `
-            <tr>
-                <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">${a.number}</td>
-                <td style="padding: 8px; border-bottom: 1px solid var(--border-color);">${a.owner_name || '—'}</td>
-                <td style="padding: 8px; border-bottom: 1px solid var(--border-color);" class="color-danger"><b>${formatCurrency(Math.abs(a.current_balance))} ₴</b></td>
-            </tr>`).join('');
+        const thresholdInput = document.getElementById('debt-threshold');
+        const threshold = thresholdInput ? (parseFloat(thresholdInput.value) || 0) : 1000;
 
-        const html = `
-            <div id="print-area" style="width: 100%; max-width: 600px; margin: 0 auto; color: var(--text-color);">
-                <h2 style="text-align:center; margin-bottom: 1rem;">Список боржників (станом на поточний момент)</h2>
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                    <thead>
-                        <tr style="background: rgba(255,255,255,0.05);">
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">№ Квартири</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Owner</th>
-                            <th style="padding: 8px; border-bottom: 2px solid var(--border-color);">Debt</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>`;
+        _debtorsData = (data.debtors || []).filter(d => d.debt >= threshold);
 
-        previewArea.style.alignItems = 'flex-start';
-        previewArea.innerHTML = html;
-        if (printBtn) printBtn.style.display = 'block';
+        // Format end date for title
+        const endParts = state.endDate.split('-');
+        const endFormatted = `${endParts[2]}.${endParts[1]}.${endParts[0]}`;
 
-        // Set global print area for window.print()
-        const oldPrint = document.getElementById('global-print-area');
-        if (oldPrint) oldPrint.remove();
-        
-        const globalPrintArea = document.createElement('div');
-        globalPrintArea.id = 'global-print-area';
-        globalPrintArea.className = 'print-container';
-        globalPrintArea.innerHTML = html;
-        document.body.appendChild(globalPrintArea);
+        _renderDebtorsTable(previewArea, printBtn, endFormatted);
 
     } catch (err) {
         previewArea.innerHTML = `<span class="color-danger">Помилка: ${err.message}</span>`;
     }
+}
+
+function _renderDebtorsTable(previewArea, printBtn, endFormatted) {
+    _debtorsEndFormatted = endFormatted; // remember for re-sort
+    // Sort
+    const sorted = [..._debtorsData].sort((a, b) => {
+        let av, bv;
+        if (_debtorsSortCol === 'apt') {
+            av = parseInt(String(a.apartment).replace(/\D/g, '')) || 0;
+            bv = parseInt(String(b.apartment).replace(/\D/g, '')) || 0;
+        } else if (_debtorsSortCol === 'owner') {
+            av = (a.owner || '').toLowerCase();
+            bv = (b.owner || '').toLowerCase();
+        } else {
+            av = a.debt;
+            bv = b.debt;
+        }
+        if (av < bv) return _debtorsSortAsc ? -1 : 1;
+        if (av > bv) return _debtorsSortAsc ? 1 : -1;
+        return 0;
+    });
+
+    const arrow = (col) => `<span class="sort-arrow">${_debtorsSortCol === col ? (_debtorsSortAsc ? ' ▲' : ' ▼') : ' ⇅'}</span>`;
+    const totalDebt = sorted.reduce((s, d) => s + d.debt, 0);
+    const count = sorted.length;
+
+    // Determine sizing class to ensure it always fits on a single page while keeping font as large as possible
+    let sizeClass = 'debtors-size-lg';
+    if (count <= 18) {
+        sizeClass = 'debtors-size-xl';
+    } else if (count > 26) {
+        sizeClass = 'debtors-size-two-cols';
+    }
+
+    const renderRow = (d) => `
+        <tr class="debtor-row">
+            <td class="debtor-apt"><b>${d.apartment}</b></td>
+            <td class="debtor-owner">${d.owner || '—'}</td>
+            <td class="debtor-amount"><b>${formatCurrency(d.debt)} ₴</b></td>
+        </tr>`;
+
+    let tablesHtml = '';
+    if (count <= 26) {
+        tablesHtml = `
+            <table class="debtors-table">
+                <thead>
+                    <tr>
+                        <th class="th-apt" onclick="_sortDebtors('apt')">№ Кв.${arrow('apt')}</th>
+                        <th class="th-owner" onclick="_sortDebtors('owner')">Власник${arrow('owner')}</th>
+                        <th class="th-debt" onclick="_sortDebtors('debt')">Борг${arrow('debt')}</th>
+                    </tr>
+                </thead>
+                <tbody>${sorted.map(renderRow).join('')}</tbody>
+                <tfoot>
+                    <tr class="debtors-total-row">
+                        <td colspan="2" class="debtor-total-label">РАЗОМ (${count} кв.):</td>
+                        <td class="debtor-amount debtor-total-amount"><b>${formatCurrency(totalDebt)} ₴</b></td>
+                    </tr>
+                </tfoot>
+            </table>`;
+    } else {
+        const half = Math.ceil(count / 2);
+        const col1 = sorted.slice(0, half);
+        const col2 = sorted.slice(half);
+        const thead = `
+            <thead>
+                <tr>
+                    <th class="th-apt" onclick="_sortDebtors('apt')">№ Кв.${arrow('apt')}</th>
+                    <th class="th-owner" onclick="_sortDebtors('owner')">Власник${arrow('owner')}</th>
+                    <th class="th-debt" onclick="_sortDebtors('debt')">Борг${arrow('debt')}</th>
+                </tr>
+            </thead>`;
+        tablesHtml = `
+            <div class="debtors-cols-wrap">
+                <table class="debtors-table">
+                    ${thead}
+                    <tbody>${col1.map(renderRow).join('')}</tbody>
+                </table>
+                <table class="debtors-table">
+                    ${thead}
+                    <tbody>${col2.map(renderRow).join('')}</tbody>
+                </table>
+            </div>
+            <div class="debtors-total-bar">
+                <span>РАЗОМ (${count} кв.):</span>
+                <span class="debtor-amount"><b>${formatCurrency(totalDebt)} ₴</b></span>
+            </div>`;
+    }
+
+    const html = `
+        <div id="print-area" class="debtors-print-container ${sizeClass}">
+            <div class="debtors-header">
+                <h2 class="debtors-title">Список боржників</h2>
+                <div class="debtors-subtitle">станом на ${endFormatted}</div>
+            </div>
+            ${tablesHtml}
+        </div>`;
+
+    previewArea.style.alignItems = 'flex-start';
+    previewArea.innerHTML = html;
+    if (printBtn) printBtn.style.display = 'block';
+
+    // Update global print area
+    const oldPrint = document.getElementById('global-print-area');
+    if (oldPrint) oldPrint.remove();
+    const globalPrintArea = document.createElement('div');
+    globalPrintArea.id = 'global-print-area';
+    globalPrintArea.className = 'print-container';
+    globalPrintArea.innerHTML = html;
+    document.body.appendChild(globalPrintArea);
 }
 
 // Settings
@@ -3430,7 +5164,7 @@ async function editApartment(id) {
 
             <label>Тип дії</label>
             <select id="action-type" class="form-control" style="width:100%; margin-bottom: 1rem">
-                <option value="adjustment">Корегування (Фінансове)</option>
+                <option value="adjustment">Коригування (фінансове)</option>
                 <option value="owner_change">Зміна власника</option>
                 <option value="area_change">Зміна площі</option>
             </select>
@@ -3616,6 +5350,7 @@ window.toggleDetailsTable = function(event) {
 window.toggleTheme = function() {
     document.body.classList.toggle('light-theme');
     const isLight = document.body.classList.contains('light-theme');
+    localStorage.setItem('zhbk_theme', isLight ? 'light' : 'dark');
     const icon = document.querySelector('#theme-toggle i');
     if (icon) {
         if (isLight) {
@@ -3627,28 +5362,48 @@ window.toggleTheme = function() {
         }
     }
     
-    // Update charts if they exist
-    const charts = [Chart.getChart("mainChart"), Chart.getChart("debtChart"), Chart.getChart("expensePieChart"), Chart.getChart("scenariosLineChart")];
-    charts.forEach(chart => {
+    // Re-render active views so all charts recreate with exact theme palettes & slice borders
+    if (state.currentPage === 'charges' && state.currentReportData && state.currentReportData[0]) {
+        renderResidentChargesChart(state.currentReportData[0].monthly_details);
+    } else if (state.currentPage === 'reports' && state.dashboardData) {
+        renderReportsCharts(state.dashboardData);
+    } else if (state.currentPage === 'forecast' && typeof window.updateScenariosCharts === 'function') {
+        window.updateScenariosCharts();
+    }
+    
+    // Update any other remaining chart instances
+    const theme = getChartThemeColors();
+    const chartIds = [
+        "mainChart",
+        "debtChart",
+        "expensesPieChart",
+        "expensePieChart",
+        "scenariosLineChart",
+        "reportsActualChart",
+        "reportsDebtChart",
+        "reportsExpensesPieChart",
+        "residentChargesChart"
+    ];
+    chartIds.forEach(id => {
+        const chart = Chart.getChart(id);
         if (chart) {
-            const textColor = isLight ? '#475569' : '#94a3b8';
-            const gridColor = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.07)';
-            
             if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
-                chart.options.plugins.legend.labels.color = textColor;
+                chart.options.plugins.legend.labels.color = theme.textColor;
             }
             if (chart.options.scales && chart.options.scales.x) {
-                chart.options.scales.x.ticks.color = textColor;
-                if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = gridColor;
+                chart.options.scales.x.ticks.color = theme.textColor;
+                if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = theme.gridColor;
             }
             if (chart.options.scales && chart.options.scales.y) {
-                chart.options.scales.y.ticks.color = textColor;
-                if (chart.options.scales.y.grid) chart.options.scales.y.grid.color = gridColor;
+                chart.options.scales.y.ticks.color = theme.textColor;
+                if (chart.options.scales.y.grid) {
+                    chart.options.scales.y.grid.color = ctx => ctx.tick.value === 0 ? theme.zeroLineColor : theme.gridColor;
+                }
             }
             chart.update();
         }
     });
-}
+};
 
 // ── Forecast Page ─────────────────────────────────────────────────────────────
 
@@ -3682,8 +5437,10 @@ window.switchDetailScenario = function(index) {
         if (balDisp) {
             balDisp.innerText = formatCurrency(params.balance) + ' ₴';
         }
-        document.getElementById('scenario-tariff').value = params.tariff.toFixed(1);
-        document.getElementById('scenario-collection').value = params.collection;
+        const tariffInput = document.getElementById('scenario-tariff');
+        if (tariffInput) tariffInput.value = params.tariff.toFixed(1);
+        const collectionInput = document.getElementById('scenario-collection');
+        if (collectionInput) collectionInput.value = params.collection;
     }
     
     window.renderDetailScenarioResults(index);
@@ -3722,9 +5479,13 @@ window.renderDetailScenarioResults = function(index) {
     const data = sData.data;
     const params = window.scenarioParams[index];
     
+    const monthsUa = (window.currentLang === 'en')
+        ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        : ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+
     const forRows = data.map(f => `
         <tr>
-            <td style="font-weight:600">${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}</td>
+            <td style="font-weight:600">${monthsUa[parseInt(f.month.split('-')[1])-1]}-${f.month.split('-')[0].substring(2)}</td>
             <td class="color-success">+${formatCurrency(f.income_total)} ₴</td>
             <td class="color-danger">-${formatCurrency(f.expense_total)} ₴</td>
             <td class="color-danger">${f.expense_activities > 0 ? "-" + formatCurrency(f.expense_activities) + " ₴" : "0.00 ₴"}</td>
@@ -3733,26 +5494,37 @@ window.renderDetailScenarioResults = function(index) {
         </tr>
     `).join("");
 
+    const isEn = window.currentLang === 'en';
+    const thMonth = isEn ? 'Month' : 'Місяць';
+    const thIncome = isEn ? 'Income (plan)' : 'Дохід (план)';
+    const thExpenses = isEn ? 'Expenses (plan)' : 'Витрати (план)';
+    const thActivities = isEn ? 'Activities' : 'Активності';
+    const thNet = isEn ? 'Net Cash Flow' : 'Чистий потік';
+    const thBalance = isEn ? 'Cumulative Balance' : 'Баланс (накопич.)';
+    const cardPlanInflows = isEn ? 'Plan. Inflows' : 'План. надходження';
+    const cardPlanExpenses = isEn ? 'Plan. Expenses' : 'План. витрати';
+    const cardExpectedBalance = isEn ? 'Expected Balance' : 'Очікуваний баланс';
+
     resultsContainer.innerHTML = `
         <div style="overflow-x:auto; margin-bottom: 2rem;">
             <table>
-                <thead><tr><th>Month</th><th>Дохід (план)</th><th>Expenses (план)</th><th>Активності</th><th>Net Cash Flow</th><th>Balance (Накопич.)</th></tr></thead>
-                <tbody>${forRows || "<tr><td colspan='6' class='text-center'>Немає прогнозу</td></tr>"}</tbody>
+                <thead><tr><th>${thMonth}</th><th>${thIncome}</th><th>${thExpenses}</th><th>${thActivities}</th><th>${thNet}</th><th>${thBalance}</th></tr></thead>
+                <tbody>${forRows || `<tr><td colspan='6' class='text-center'>${isEn ? 'No forecast' : 'Немає прогнозу'}</td></tr>`}</tbody>
             </table>
         </div>
         
-        <h4 style="margin-bottom: 1rem;">Зведені показники</h4>
+        <h4 style="margin-bottom: 1rem;">${isEn ? 'Summary Indicators' : 'Зведені показники'}</h4>
         <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); width: 100%; gap:1rem; margin-bottom: 0;">
             <div class="stat-card" style="padding: 1.5rem;">
-                <h3 style="font-size:0.85rem">План. Inflows</h3>
+                <h3 style="font-size:0.85rem">${cardPlanInflows}</h3>
                 <div class="value color-success" style="font-size: 1.5rem;">+${formatCurrency(sData.planIncome)} ₴</div>
             </div>
             <div class="stat-card" style="padding: 1.5rem;">
-                <h3 style="font-size:0.85rem">План. Expenses</h3>
+                <h3 style="font-size:0.85rem">${cardPlanExpenses}</h3>
                 <div class="value color-danger" style="font-size: 1.5rem;">-${formatCurrency(sData.planExpenses)} ₴</div>
             </div>
             <div class="stat-card" style="padding: 1.5rem;">
-                <h3 style="font-size:0.85rem">Очікуваний баланс</h3>
+                <h3 style="font-size:0.85rem">${cardExpectedBalance}</h3>
                 <div class="value ${sData.finalBalance >= 0 ? 'color-success' : 'color-danger'}" style="font-size: 1.5rem;">${formatCurrency(sData.finalBalance)} ₴</div>
             </div>
         </div>
@@ -3920,7 +5692,9 @@ window.updateScenariosCharts = async function() {
     const loaded = indices.filter(i => window.scenariosData[i]);
     if (loaded.length === 0) return;
     
-    const monthNamesUa = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNamesUa = (window.currentLang === 'en')
+        ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        : ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
     const firstData = window.scenariosData[loaded[0]].data;
     
     const endY = parseInt(state.endDate.split('-')[0]);
@@ -4188,12 +5962,12 @@ window.showAddActivityModalGlobal = function() {
     const now = new Date();
     const startMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, "0")}`;
     
-    modalTitle.innerText = 'Add Initiative';
+    modalTitle.innerText = 'Додати ініціативу';
     modalBody.innerHTML = `
         <div class="form-group">
             <label>Назва ініціативи</label>
             <input type="text" id="global-act-name" class="form-control" style="width:100%;margin-bottom:1rem">
-            <label>Amount (₴)</label>
+            <label>Вартість (₴)</label>
             <input type="number" id="global-act-amount" class="form-control" style="width:100%;margin-bottom:1rem">
             <label>Місяць планування</label>
             <input type="month" id="global-act-month" class="form-control" style="width:100%" value="${startMonth}">
@@ -4223,4 +5997,812 @@ window.showAddActivityModalGlobal = function() {
             }
         };
     }
+};
+
+window.saveScenariosConfig = async function(btn) {
+    if (!window.scenarioParams || !window.scenarioExcludedActivities) return;
+    
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Збереження...`;
+    }
+
+    const payload = {
+        scenario_params: {
+            "1": {
+                tariff: window.scenarioParams[1] ? window.scenarioParams[1].tariff : 4.4,
+                collection: window.scenarioParams[1] ? window.scenarioParams[1].collection : 85
+            },
+            "2": {
+                tariff: window.scenarioParams[2] ? window.scenarioParams[2].tariff : 8.0,
+                collection: window.scenarioParams[2] ? window.scenarioParams[2].collection : 85
+            },
+            "3": {
+                tariff: window.scenarioParams[3] ? window.scenarioParams[3].tariff : 12.0,
+                collection: window.scenarioParams[3] ? window.scenarioParams[3].collection : 85
+            }
+        },
+        excluded_activities: {
+            "1": Array.from(window.scenarioExcludedActivities[1] || []),
+            "2": Array.from(window.scenarioExcludedActivities[2] || []),
+            "3": Array.from(window.scenarioExcludedActivities[3] || [])
+        }
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/forecast/scenarios/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+            if (btn) {
+                btn.innerHTML = `<i class="fas fa-check"></i> Збережено!`;
+                btn.style.background = '#10b981';
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml || `<i class="fas fa-save"></i> Зберегти`;
+                    btn.style.background = '';
+                }, 2500);
+            }
+        } else {
+            throw new Error('Помилка сервера');
+        }
+    } catch(err) {
+        console.error(err);
+        alert('Не вдалося зберегти плани: ' + err.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
+};
+
+// ─── Support & Help Module ───────────────────────────────────────────────────
+function escapeSupportHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+window.renderPhoneLinks = function(text) {
+    if (!text) return '';
+    if (text.includes('вул.') || text.includes('м. ') || text.includes('St.')) {
+        return `<span>${text}</span>`;
+    }
+    const parts = text.split('·');
+    if (parts.length > 1) {
+        return parts.map(p => {
+            const raw = p.trim();
+            const clean = raw.replace(/\D/g, '');
+            return `<a href="tel:${clean}" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='inherit'">${raw}</a>`;
+        }).join(' · ');
+    }
+    const clean = text.replace(/\D/g, '');
+    if (clean.length >= 3 && clean.length <= 13) {
+        return `<a href="tel:${clean}" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='inherit'">${text}</a>`;
+    }
+    return `<span>${text}</span>`;
+};
+
+window.renderSupportContactItem = function(c, isEn) {
+    const isEmerg = c.is_emergency;
+    return `
+        <div class="support-info-item" style="${isEmerg ? 'border-top: 1px dashed var(--border-color); margin-top: 0.4rem; padding-top: 0.5rem;' : ''}">
+            <div class="support-info-icon" style="${isEmerg ? 'color: #ef4444;' : ''}">
+                <i class="${c.icon || (isEmerg ? 'fas fa-exclamation-triangle' : 'fas fa-phone-alt')}"></i>
+            </div>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 0.72rem; color: ${isEmerg ? '#ef4444' : 'var(--text-secondary)'}; text-transform: uppercase; font-weight: 700; line-height: 1.3;">
+                    ${window.t ? window.t(c.category) : c.category}
+                </div>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: ${isEmerg ? '0.92rem' : '0.875rem'}; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; align-items: center;">
+                    ${window.renderPhoneLinks(c.title || c.phone || '')}
+                    ${c.link ? `
+                        <a href="${c.link}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-color); font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; padding: 3px 8px; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.2); border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(37,99,235,0.15)'" onmouseout="this.style.background='rgba(37,99,235,0.08)'" title="Відкрити офіційний сайт">
+                            <i class="fas fa-external-link-alt"></i> ${isEn ? 'Portal' : 'Сайт єДніпро'}
+                        </a>
+                    ` : ''}
+                </div>
+                ${c.subtitle ? `
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; line-height: 1.3;">
+                        ${window.t ? window.t(c.subtitle) : c.subtitle}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+};
+
+async function renderHelp() {
+    if (pageTitle) {
+        pageTitle.innerText = window.t ? window.t('Допомога та Звернення') : 'Допомога та Звернення';
+    }
+
+    const isEn = (window.currentLang === 'en');
+    const token = localStorage.getItem('zhbk_token');
+    const isResident = currentUser && currentUser.role === 'resident';
+    const residentAptId = currentUser ? currentUser.apartment_id : null;
+
+    if (!state.apartments || state.apartments.length === 0) {
+        await fetchApartments();
+    }
+
+    // Fetch support contacts
+    let contacts = [];
+    try {
+        const res = await fetch(`${API_BASE}/support/contacts`);
+        if (res.ok) contacts = await res.json();
+    } catch (e) {
+        console.error('Failed to load support contacts:', e);
+    }
+    window._currentSupportContacts = contacts;
+
+    // Fetch existing messages
+    let messages = [];
+    try {
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/support/messages`, { headers });
+        if (res.ok) {
+            messages = await res.json();
+        }
+    } catch (err) {
+        console.error('Failed to load support messages:', err);
+    }
+
+    // Determine prefill info for resident
+    let residentAptNum = '';
+    let residentOwnerName = '';
+    if (residentAptId && state.apartments) {
+        const apt = state.apartments.find(a => a.id == residentAptId);
+        if (apt) {
+            residentAptNum = apt.number;
+            residentOwnerName = apt.owner_name || '';
+        }
+    }
+
+    const statusBadge = (st) => {
+        if (st === 'resolved') {
+            return `<span class="status-badge status-badge-resolved"><i class="fas fa-check-circle"></i> ${window.t ? window.t('Опрацьовано') : 'Опрацьовано'}</span>`;
+        } else if (st === 'in_progress') {
+            return `<span class="status-badge status-badge-in_progress"><i class="fas fa-spinner fa-spin"></i> ${window.t ? window.t('В роботі') : 'В роботі'}</span>`;
+        }
+        return `<span class="status-badge status-badge-new"><i class="fas fa-clock"></i> ${window.t ? window.t('Нове') : 'Нове'}</span>`;
+    };
+
+    contentArea.innerHTML = `
+        <div class="dash-content-container" style="max-width: 1200px; margin: 0 auto; padding-bottom: 2rem;">
+            <!-- Top Grid: Contacts & Form -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+                <!-- Card 1: Official Contacts -->
+                <div class="support-card" style="max-height: 580px; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                        <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-clipboard-list" style="color: var(--accent-color);"></i> ${window.t ? window.t('Контакти правління та служб') : 'Контакти правління та служб'}
+                        </h3>
+                        ${!isResident ? `
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="window.openEditContactsModal()" style="font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;" title="Редагувати контакти">
+                                <i class="fas fa-edit"></i> ${window.t ? window.t('Редагувати') : 'Редагувати'}
+                            </button>
+                        ` : ''}
+                    </div>
+                    
+                    <div id="support-contacts-container">
+                        ${contacts.map(c => window.renderSupportContactItem(c, isEn)).join('')}
+                    </div>
+                </div>
+
+                <!-- Card 2: Create Message Form -->
+                <div class="support-card">
+                    <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-paper-plane" style="color: var(--accent-color);"></i> ${window.t ? window.t('Подати звернення до правління') : 'Подати звернення до правління'}
+                    </h3>
+                    <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+                        ${window.t ? window.t('Маєте запитання щодо нарахувань, лічильників чи благоустрою будинку? Заповніть форму — ваше звернення буде зафіксоване в електронному журналі.') : 'Маєте запитання щодо нарахувань, лічильників чи благоустрою будинку? Заповніть форму — ваше звернення буде зафіксоване в електронному журналі.'}
+                    </p>
+                    
+                    <form id="support-message-form" onsubmit="window.submitSupportMessage(event)">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('Квартира № *') : 'Квартира № *'}</label>
+                                <input type="number" id="support-apt-num" class="form-control" style="width: 100%; border-radius: 8px; font-size: 0.8125rem;" placeholder="№" value="${residentAptNum}" ${isResident && residentAptNum ? 'readonly' : ''} required>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('ПІБ мешканця') : 'ПІБ мешканця'}</label>
+                                <input type="text" id="support-resident-name" class="form-control" style="width: 100%; border-radius: 8px; font-size: 0.8125rem;" placeholder="${isEn ? 'Full name' : 'Прізвище, ім\'я'}" value="${residentOwnerName}">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('Контактний телефон *') : 'Контактний телефон *'}</label>
+                                <input type="tel" id="support-phone" class="form-control" style="width: 100%; border-radius: 8px; font-size: 0.8125rem;" placeholder="+38 (0XX) XXX-XX-XX" required>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('Категорія звернення') : 'Категорія звернення'}</label>
+                                <select id="support-category" class="form-control" style="width: 100%; border-radius: 8px; font-size: 0.8125rem;">
+                                    <option value="Питання по нарахуваннях / оплатах">${window.t ? window.t('Питання по нарахуваннях / оплатах') : 'Питання по нарахуваннях / оплатах'}</option>
+                                    <option value="Зміна даних власника / мешканця">${window.t ? window.t('Зміна даних власника / мешканця') : 'Зміна даних власника / мешканця'}</option>
+                                    <option value="Хочу допомогти будинку">${window.t ? window.t('Хочу допомогти будинку') : 'Хочу допомогти будинку'}</option>
+                                    <option value="Поділитись контактами електрика/сантехніка">${window.t ? window.t('Поділитись контактами електрика/сантехніка') : 'Поділитись контактами електрика/сантехніка'}</option>
+                                    <option value="Довідка / Документи">${window.t ? window.t('Довідка / Документи') : 'Довідка / Документи'}</option>
+                                    <option value="Пропозиція / Скарга">${window.t ? window.t('Пропозиція / Скарга') : 'Пропозиція / Скарга'}</option>
+                                    <option value="Інше питання">${window.t ? window.t('Інше питання') : 'Інше питання'}</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('Тема звернення') : 'Тема звернення'}</label>
+                            <input type="text" id="support-subject" class="form-control" style="width: 100%; border-radius: 8px; font-size: 0.8125rem;" placeholder="${isEn ? 'Brief subject...' : 'Короткий опис теми...'}">
+                        </div>
+
+                        <div style="margin-bottom: 14px;">
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px;">${window.t ? window.t('Текст звернення *') : 'Текст звернення *'}</label>
+                            <textarea id="support-text" class="form-control" rows="3" style="width: 100%; border-radius: 8px; resize: vertical; font-size: 0.8125rem;" placeholder="${isEn ? 'Describe your issue or question in detail...' : 'Опишіть ситуацію, проблему або питання детально...'}" required></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                            <span id="support-form-status" style="font-size: 0.8125rem; display: none;"></span>
+                            <button type="submit" id="btn-submit-support" class="btn btn-primary" style="padding: 7px 20px; font-size: 0.8125rem; font-weight: 600; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-paper-plane"></i> ${window.t ? window.t('Надіслати звернення') : 'Надіслати звернення'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Messages Table Section -->
+            <div class="support-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin: 0 0 3px 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-history" style="color: var(--accent-color);"></i>
+                            ${isResident ? (window.t ? window.t('Мої надіслані звернення') : 'Мої надіслані звернення') : (window.t ? window.t('Журнал звернень мешканців ЖБК') : 'Журнал звернень мешканців ЖБК')}
+                        </h3>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                            ${isResident ? (window.t ? window.t('Історія звернень вашої квартири та офіційні відповіді правління') : 'Історія звернень вашої квартири та офіційні відповіді правління') : (window.t ? window.t('Повний реєстр звернень, контроль виконання та офіційні відповіді') : 'Повний реєстр звернень, контроль виконання та офіційні відповіді')}
+                        </div>
+                    </div>
+                    ${!isResident ? `
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${window.t ? window.t('Фільтр:') : 'Фільтр:'}</span>
+                        <select id="support-filter-status" class="form-control" style="font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" onchange="window.filterSupportMessages(this.value)">
+                            <option value="all">${window.t ? window.t('Всі звернення') : 'Всі звернення'} (${messages.length})</option>
+                            <option value="new">${window.t ? window.t('Нові') : 'Нові'} (${messages.filter(m => m.status === 'new').length})</option>
+                            <option value="in_progress">${window.t ? window.t('В роботі') : 'В роботі'} (${messages.filter(m => m.status === 'in_progress').length})</option>
+                            <option value="resolved">${window.t ? window.t('Опрацьовані') : 'Опрацьовані'} (${messages.filter(m => m.status === 'resolved').length})</option>
+                        </select>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="table-responsive" style="overflow-x: auto;">
+                    <table class="data-table" id="support-messages-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th style="width: 85px;">${window.t ? window.t('Дата') : 'Дата'}</th>
+                                ${!isResident ? `<th style="width: 75px;">${window.t ? window.t('кв.') : 'Кв.'}</th>` : ''}
+                                ${!isResident ? `<th>${isEn ? 'Resident / Phone' : 'Мешканець / Телефон'}</th>` : ''}
+                                <th style="width: 150px;">${window.t ? window.t('Категорія') : 'Категорія'}</th>
+                                <th>${window.t ? window.t('Звернення') : 'Звернення'}</th>
+                                <th style="width: 120px; text-align: center;">${window.t ? window.t('Статус') : 'Статус'}</th>
+                                <th>${window.t ? window.t('Відповідь правління') : 'Відповідь правління'}</th>
+                                ${!isResident ? `<th style="width: 110px; text-align: right;">${window.t ? window.t('Дія') : 'Дія'}</th>` : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${messages.length === 0 ? `
+                                <tr>
+                                    <td colspan="${isResident ? 5 : 8}" style="text-align: center; padding: 2.5rem; color: var(--text-secondary); font-size: 0.8125rem;">
+                                        <i class="far fa-folder-open" style="font-size: 2rem; opacity: 0.4; display: block; margin-bottom: 0.5rem;"></i>
+                                        ${window.t ? window.t('Звернень поки що немає') : 'Звернень поки що немає'}
+                                    </td>
+                                </tr>
+                            ` : messages.map(m => `
+                                <tr data-status="${m.status}" id="msg-row-${m.id}">
+                                    <td style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">
+                                        ${m.created_at ? new Date(m.created_at).toLocaleDateString(isEn ? 'en-US' : 'uk-UA', {day: '2-digit', month: '2-digit', year: 'numeric'}) : '—'}
+                                    </td>
+                                    ${!isResident ? `
+                                    <td style="font-weight: 700; color: var(--accent-color); font-size: 0.8125rem;">
+                                        ${isEn ? 'Apt. ' : 'кв. '}${m.apartment_number || (m.apartment_id ? `№${m.apartment_id}` : '—')}
+                                    </td>` : ''}
+                                    ${!isResident ? `
+                                    <td style="font-size: 0.8125rem;">
+                                        <div style="font-weight: 600; color: var(--text-primary);">${escapeSupportHtml(m.resident_name || (isEn ? 'Not specified' : 'Не вказано'))}</div>
+                                        ${m.contact_phone ? `<div style="font-size: 0.75rem; color: var(--text-secondary);"><i class="fas fa-phone-alt" style="font-size: 0.65rem;"></i> ${escapeSupportHtml(m.contact_phone)}</div>` : ''}
+                                    </td>` : ''}
+                                    <td>
+                                        <span style="font-size: 0.75rem; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; display: inline-block;">${window.t ? window.t(m.category) : escapeSupportHtml(m.category)}</span>
+                                    </td>
+                                    <td style="max-width: 280px;">
+                                        ${m.subject ? `<div style="font-weight: 600; font-size: 0.8125rem; margin-bottom: 2px;">${escapeSupportHtml(m.subject)}</div>` : ''}
+                                        <div style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.4; white-space: pre-wrap;">${escapeSupportHtml(m.message)}</div>
+                                    </td>
+                                    <td style="text-align: center; white-space: nowrap;">
+                                        ${statusBadge(m.status)}
+                                    </td>
+                                    <td style="max-width: 250px; font-size: 0.8125rem;">
+                                        ${m.admin_response ? `
+                                            <div style="background: rgba(16,185,129,0.08); border-left: 3px solid #10b981; padding: 6px 10px; border-radius: 0 6px 6px 0; color: var(--text-primary);">
+                                                ${escapeSupportHtml(m.admin_response)}
+                                            </div>
+                                        ` : `<span style="color: var(--text-secondary); font-style: italic; font-size: 0.75rem;">${window.t ? window.t('Очікує розгляду') : 'Очікує розгляду'}</span>`}
+                                    </td>
+                                    ${!isResident ? `
+                                    <td style="text-align: right; white-space: nowrap;">
+                                        <button class="btn btn-sm btn-secondary" onclick="window.openAdminReplyModal(${m.id}, '${escapeSupportHtml(m.status || 'new')}', '${escapeSupportHtml((m.admin_response || '').replace(/'/g, "\\'"))}')" style="font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;" title="${window.t ? window.t('Відповісти') : 'Відповісти'}">
+                                            <i class="fas fa-reply"></i> ${window.t ? window.t('Відповісти') : 'Відповісти'}
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="window.deleteSupportMessage(${m.id})" style="font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; margin-left: 4px;" title="Видалити звернення">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>` : ''}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Response Modal -->
+        <div id="admin-reply-modal" class="custom-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,23,42,0.85); z-index: 99999; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
+            <div class="modal-content" style="background: #1e293b; border: 1px solid var(--border-color); border-radius: 14px; width: 500px; max-width: 90%; padding: 1.5rem; box-shadow: 0 25px 60px rgba(0,0,0,0.8);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);"><i class="fas fa-reply" style="color: var(--accent-color);"></i> Опрацювання звернення</h3>
+                    <button class="btn btn-sm btn-secondary" onclick="document.getElementById('admin-reply-modal').style.display = 'none'" style="padding: 2px 8px; border-radius: 4px;"><i class="fas fa-times"></i></button>
+                </div>
+                <input type="hidden" id="modal-reply-msg-id">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Статус виконання</label>
+                    <select id="modal-reply-status" class="form-control" style="width: 100%; border-radius: 8px;">
+                        <option value="new">🟡 Нове (очікує)</option>
+                        <option value="in_progress">🔵 В роботі (прийнято до виконання)</option>
+                        <option value="resolved">🟢 Вирішено / Опрацьовано</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 1.25rem;">
+                    <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Офіційна відповідь правління для мешканця</label>
+                    <textarea id="modal-reply-text" class="form-control" rows="4" style="width: 100%; border-radius: 8px; resize: vertical;" placeholder="Вкажіть коментар або результат виконання..."></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('admin-reply-modal').style.display = 'none'">Скасувати</button>
+                    <button class="btn btn-primary" onclick="window.saveAdminReply()"><i class="fas fa-save"></i> Зберегти</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Contacts Modal -->
+        <div id="edit-contacts-modal" class="custom-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15,23,42,0.85); z-index: 100002; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
+            <div class="modal-content" style="background: #1e293b; border: 1px solid var(--border-color); border-radius: 14px; width: 740px; max-width: 95%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.8);">
+                <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #273549;">
+                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-address-book" style="color: var(--accent-color);"></i>
+                        ${window.t ? window.t('Редагування контактів та служб') : 'Редагування контактів та служб'}
+                    </h3>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="window.closeEditContactsModal()" style="padding: 2px 8px; border-radius: 4px;"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div id="contacts-editor-items" style="padding: 1.25rem; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 12px; background: #0f172a;">
+                    <!-- Editor rows -->
+                </div>
+
+                <div style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #273549; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="window.addContactRow()" style="font-size: 0.8rem; padding: 6px 12px;">
+                            <i class="fas fa-plus"></i> ${window.t ? window.t('Додати контакт') : 'Додати контакт'}
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="window.resetContactsToDefault()" style="font-size: 0.8rem; padding: 6px 12px;" title="Скинути до стандартних реквізитів м. Дніпро">
+                            <i class="fas fa-undo"></i> ${window.t ? window.t('Відновити стандартні') : 'Відновити стандартні'}
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="window.closeEditContactsModal()" style="font-size: 0.8rem; padding: 6px 14px;">
+                            Скасувати
+                        </button>
+                        <button type="button" id="btn-save-contacts" class="btn btn-primary btn-sm" onclick="window.saveSupportContacts()" style="font-size: 0.8rem; padding: 6px 16px;">
+                            <i class="fas fa-save"></i> ${window.t ? window.t('Зберегти контакти') : 'Зберегти контакти'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.renderHelp = renderHelp;
+
+window.openEditContactsModal = function() {
+    const modal = document.getElementById('edit-contacts-modal');
+    if (!modal) return;
+    window.renderContactsEditorRows();
+    modal.style.display = 'flex';
+};
+
+window.closeEditContactsModal = function() {
+    const modal = document.getElementById('edit-contacts-modal');
+    if (modal) modal.style.display = 'none';
+};
+
+window.renderContactsEditorRows = function() {
+    const container = document.getElementById('contacts-editor-items');
+    if (!container) return;
+    const items = window._currentSupportContacts || [];
+    if (items.length === 0) {
+        container.innerHTML = `<p style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">Немає контактів. Натисніть «Додати контакт» або «Відновити стандартні».</p>`;
+        return;
+    }
+    container.innerHTML = items.map((c, idx) => `
+        <div class="contact-editor-row" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                    <span style="font-weight: 700; font-size: 0.75rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color);">#${idx + 1}</span>
+                    <input type="text" class="form-control" style="font-size: 0.8125rem; font-weight: 700; flex: 1; max-width: 320px;" placeholder="Категорія / Служба (напр. Голова ЖБК)" value="${escapeSupportHtml(c.category || '')}" onchange="window.updateContactField(${idx}, 'category', this.value)">
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="font-size: 0.75rem; color: #ef4444; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; user-select: none;">
+                        <input type="checkbox" ${c.is_emergency ? 'checked' : ''} onchange="window.updateContactField(${idx}, 'is_emergency', this.checked)"> Аварійна / Екстрена
+                    </label>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="window.deleteContactRow(${idx})" style="padding: 3px 8px; border-radius: 4px; font-size: 0.75rem;" title="Видалити">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label style="display: block; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">Телефон(и) або основний текст *</label>
+                    <input type="text" class="form-control" style="width: 100%; font-size: 0.8125rem;" placeholder="067 000 00 00 або 1530" value="${escapeSupportHtml(c.title || '')}" onchange="window.updateContactField(${idx}, 'title', this.value)">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">Графік роботи або примітка</label>
+                    <input type="text" class="form-control" style="width: 100%; font-size: 0.8125rem;" placeholder="Цілодобово / Вівторок 18:00..." value="${escapeSupportHtml(c.subtitle || '')}" onchange="window.updateContactField(${idx}, 'subtitle', this.value)">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                <div>
+                    <label style="display: block; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">Посилання на сайт (якщо є)</label>
+                    <input type="url" class="form-control" style="width: 100%; font-size: 0.8125rem;" placeholder="https://hotline.dniprorada.gov.ua/..." value="${escapeSupportHtml(c.link || '')}" onchange="window.updateContactField(${idx}, 'link', this.value)">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">Іконка FontAwesome</label>
+                    <input type="text" class="form-control" style="width: 100%; font-size: 0.8125rem;" placeholder="fas fa-phone-alt" value="${escapeSupportHtml(c.icon || 'fas fa-phone-alt')}" onchange="window.updateContactField(${idx}, 'icon', this.value)">
+                </div>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.updateContactField = function(index, field, value) {
+    if (window._currentSupportContacts && window._currentSupportContacts[index]) {
+        window._currentSupportContacts[index][field] = value;
+    }
+};
+
+window.deleteContactRow = function(index) {
+    if (window._currentSupportContacts) {
+        window._currentSupportContacts.splice(index, 1);
+        window.renderContactsEditorRows();
+    }
+};
+
+window.addContactRow = function() {
+    if (!window._currentSupportContacts) window._currentSupportContacts = [];
+    window._currentSupportContacts.push({
+        id: 'contact_' + Date.now(),
+        icon: 'fas fa-phone-alt',
+        category: 'Нова служба',
+        title: '',
+        subtitle: '',
+        phone: '',
+        link: '',
+        is_emergency: false
+    });
+    window.renderContactsEditorRows();
+    const container = document.getElementById('contacts-editor-items');
+    if (container) container.scrollTop = container.scrollHeight;
+};
+
+window.resetContactsToDefault = async function() {
+    if (!confirm('Відновити контакти до стандартних реквізитів м. Дніпро?')) return;
+    const defaultList = [
+        {
+            id: "building_address",
+            icon: "fas fa-map-marker-alt",
+            category: "Адреса будинку",
+            title: "м. Дніпро, вул. Михайла Грушевського, 14",
+            subtitle: "ЖБК № 102 «Заполяр'є» (ЄДРПОУ 23025161)",
+            phone: "",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "board_head",
+            icon: "fas fa-user-tie",
+            category: "Голова ЖБК",
+            title: "067 636 66 89",
+            subtitle: "",
+            phone: "067 636 66 89",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "accountant",
+            icon: "fas fa-calculator",
+            category: "Бухгалтер ЖБК",
+            title: "098 206 09 31",
+            subtitle: "Субота: 12:00 – 16:00 (Олена Олександрівна)",
+            phone: "098 206 09 31",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "emergency_dispatcher",
+            icon: "fas fa-tools",
+            category: "Аварійний диспетчер (загальні місця та прибудинкова територія)",
+            title: "096 132 32 42 · 067 132 32 42 · 063 132 32 42 · 099 132 32 42",
+            subtitle: "Цілодобово",
+            phone: "096 132 32 42",
+            link: "",
+            is_emergency: true
+        },
+        {
+            id: "elevator",
+            icon: "fas fa-angle-double-up",
+            category: "Диспетчер з обслуговування ліфтів",
+            title: "056 790 99 50 · 067 523 65 58 · 099 357 53 49",
+            subtitle: "Цілодобово",
+            phone: "056 790 99 50",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "gas",
+            icon: "fas fa-burn",
+            category: "Газова обслуговуюча компанія",
+            title: "067 890 56 60",
+            subtitle: "Цілодобово",
+            phone: "067 890 56 60",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "water",
+            icon: "fas fa-faucet",
+            category: "Контролер Водоканалу (Вікторія)",
+            title: "095 789 45 59 · 068 874 35 97",
+            subtitle: "",
+            phone: "095 789 45 59",
+            link: "",
+            is_emergency: false
+        },
+        {
+            id: "dnipro_hotline",
+            icon: "fas fa-exclamation-triangle",
+            category: "Цілодобова єдина гаряча лінія для звернень громадян",
+            title: "1530",
+            subtitle: "Офіційний веб-портал звернень громадян м. Дніпро",
+            phone: "1530",
+            link: "https://hotline.dniprorada.gov.ua/personalcabinet/createrequest",
+            is_emergency: true
+        }
+    ];
+    window._currentSupportContacts = defaultList;
+    window.renderContactsEditorRows();
+};
+
+window.saveSupportContacts = async function() {
+    const btn = document.getElementById('btn-save-contacts');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Збереження...`;
+    }
+    const token = localStorage.getItem('zhbk_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    try {
+        const res = await fetch(`${API_BASE}/support/contacts`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(window._currentSupportContacts || [])
+        });
+        if (res.ok) {
+            window.closeEditContactsModal();
+            await renderHelp();
+        } else {
+            const err = await res.json();
+            throw new Error(err.detail || 'Помилка збереження контактів');
+        }
+    } catch (e) {
+        console.error('Save contacts error:', e);
+        alert('Не вдалося зберегти контакти: ' + e.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fas fa-save"></i> Зберегти контакти`;
+        }
+    }
+};
+
+window.submitSupportMessage = async function(event) {
+    if (event) event.preventDefault();
+
+    const aptNum = document.getElementById('support-apt-num').value.trim();
+    const residentName = document.getElementById('support-resident-name').value.trim();
+    const phone = document.getElementById('support-phone').value.trim();
+    const category = document.getElementById('support-category').value;
+    const subject = document.getElementById('support-subject').value.trim();
+    const text = document.getElementById('support-text').value.trim();
+    const statusEl = document.getElementById('support-form-status');
+    const submitBtn = document.getElementById('btn-submit-support');
+
+    if (!text) {
+        alert('Будь ласка, вкажіть текст звернення');
+        return;
+    }
+
+    let aptId = null;
+    if (currentUser && currentUser.role === 'resident' && currentUser.apartment_id) {
+        aptId = currentUser.apartment_id;
+    } else if (aptNum && state.apartments) {
+        const found = state.apartments.find(a => String(a.number) === String(aptNum));
+        if (found) aptId = found.id;
+    }
+
+    const payload = {
+        apartment_id: aptId,
+        resident_name: residentName || undefined,
+        contact_phone: phone || undefined,
+        category: category || "Загальне питання",
+        subject: subject || undefined,
+        message: text
+    };
+
+    const token = localStorage.getItem('zhbk_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Надсилання...`;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/support/messages`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            if (statusEl) {
+                statusEl.style.display = 'inline-block';
+                statusEl.style.color = '#10b981';
+                statusEl.innerHTML = `<i class="fas fa-check-circle"></i> Звернення надіслано!`;
+            }
+            alert('Дякуємо! Ваше звернення зафіксовано і передано правлінню ЖБК.');
+            await renderHelp();
+        } else {
+            throw new Error(data.detail || 'Помилка надсилання');
+        }
+    } catch (err) {
+        console.error('Submit support message error:', err);
+        alert('Не вдалося надіслати звернення: ' + err.message);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Надіслати звернення`;
+        }
+    }
+};
+
+window.filterSupportMessages = function(status) {
+    const rows = document.querySelectorAll('#support-messages-table tbody tr');
+    rows.forEach(r => {
+        const rowStatus = r.getAttribute('data-status');
+        if (!rowStatus) return;
+        if (status === 'all' || rowStatus === status) {
+            r.style.display = '';
+        } else {
+            r.style.display = 'none';
+        }
+    });
+};
+
+window.openAdminReplyModal = function(msgId, currentStatus, currentResponse) {
+    const modal = document.getElementById('admin-reply-modal');
+    if (!modal) return;
+    document.getElementById('modal-reply-msg-id').value = msgId;
+    document.getElementById('modal-reply-status').value = currentStatus || 'new';
+    document.getElementById('modal-reply-text').value = currentResponse || '';
+    modal.style.display = 'flex';
+};
+
+window.saveAdminReply = async function() {
+    const msgId = document.getElementById('modal-reply-msg-id').value;
+    const status = document.getElementById('modal-reply-status').value;
+    const responseText = document.getElementById('modal-reply-text').value.trim();
+
+    const token = localStorage.getItem('zhbk_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    try {
+        const res = await fetch(`${API_BASE}/support/messages/${msgId}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({
+                status: status,
+                admin_response: responseText
+            })
+        });
+
+        if (res.ok) {
+            const modal = document.getElementById('admin-reply-modal');
+            if (modal) modal.style.display = 'none';
+            await renderHelp();
+        } else {
+            const err = await res.json();
+            throw new Error(err.detail || 'Помилка оновлення');
+        }
+    } catch (err) {
+        console.error('Error saving reply:', err);
+        alert('Не вдалося зберегти відповідь: ' + err.message);
+    }
+};
+
+window.deleteSupportMessage = async function(id) {
+    if (!confirm('Ви впевнені, що хочете видалити це звернення?')) return;
+    const token = localStorage.getItem('zhbk_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+        const res = await fetch(`${API_BASE}/support/messages/${id}`, {
+            method: 'DELETE',
+            headers
+        });
+        if (res.ok) {
+            await renderHelp();
+        } else {
+            const err = await res.json();
+            alert('Не вдалося видалити: ' + (err.detail || 'Помилка сервера'));
+        }
+    } catch (e) {
+        alert('Помилка: ' + e.message);
+    }
+};
+
+
+window.goToOwnerChangeRequest = async function() {
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(n => {
+        if (n.getAttribute('data-page') === 'help') n.classList.add('active');
+        else n.classList.remove('active');
+    });
+    await loadPage('help');
+    
+    setTimeout(() => {
+        const catSelect = document.getElementById('support-category');
+        if (catSelect) {
+            catSelect.value = 'Зміна даних власника / мешканця';
+        }
+        const subjInput = document.getElementById('support-subject');
+        if (subjInput) {
+            const isEn = (window.currentLang === 'en');
+            subjInput.value = isEn ? 'Request to update owner/resident information' : 'Заявка на зміну даних власника';
+        }
+        const textInput = document.getElementById('support-text');
+        if (textInput) {
+            textInput.focus();
+            textInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 100);
 };

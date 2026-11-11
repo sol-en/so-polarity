@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: zhbk102-app
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        value: 813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: zhbk102-db
+          property: connectionString
+
+databases:
+  - name: zhbk102-db
+    databaseName: zhbk102
+    user: zhbk
+    plan: free

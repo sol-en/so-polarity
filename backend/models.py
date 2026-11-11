@@ -158,3 +158,40 @@ class UserAccess(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     apartment = relationship("Apartment")
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class ReportDocument(Base):
+    __tablename__ = "report_documents"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    year = Column(Integer, nullable=False)
+    period = Column(String, nullable=True) # e.g. 'Річний звіт', 'Акт ревізії', 'Кошторис'
+    filename = Column(String, nullable=False)
+    file_size = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    note = Column(Text, nullable=True)
+
+class ResidentMessage(Base):
+    __tablename__ = "resident_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    apartment_id = Column(Integer, ForeignKey("apartments.id"), nullable=True)
+    resident_name = Column(String, nullable=True)
+    contact_phone = Column(String, nullable=True)
+    contact_email = Column(String, nullable=True)
+    category = Column(String, nullable=False, default="Загальне питання")
+    subject = Column(String, nullable=True)
+    message = Column(Text, nullable=False)
+    status = Column(String, default="new") # 'new', 'in_progress', 'resolved'
+    admin_response = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    apartment = relationship("Apartment")
+
+

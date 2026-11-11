@@ -8,7 +8,7 @@ env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(env_path)
 
 from .database import engine, Base
-from .routers import apartments, transactions, categories, tariffs, charges, dashboard, contractors, forecast, auth
+from .routers import apartments, transactions, categories, tariffs, charges, dashboard, contractors, forecast, auth, reports, support
 from .bank_integration.router import router as bank_router
 from . import bank_models  # Ensure bank integration tables are created
 
@@ -30,6 +30,8 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 app.include_router(contractors.router, prefix="/api/contractors", tags=["Contractors"])
 app.include_router(bank_router, prefix="/api/bank", tags=["Bank Integration"])
 app.include_router(forecast.router, prefix="/api/forecast", tags=["Forecast"])
+app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.include_router(support.router, prefix="/api/support", tags=["Support"])
 
 # Serve Static Files
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")

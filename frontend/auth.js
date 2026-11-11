@@ -39,7 +39,9 @@ async function handleGoogleLogin(response) {
         document.getElementById('main-app').style.display = 'flex'; // It uses flex usually
         
         // Re-initialize or fetch initial data since app might have failed initial fetches without token
-        if (typeof window.loadDashboardData === 'function') {
+        if (typeof window.loadPage === 'function') {
+            window.loadPage(currentUser.role === 'resident' ? 'charges' : 'reports');
+        } else if (typeof window.loadDashboardData === 'function') {
             window.loadDashboardData();
         }
         
@@ -72,26 +74,98 @@ function checkExistingLogin() {
     return false;
 }
 
+window.renderResidentSidebar = function(apt) {
+    const resInfo = document.getElementById('resident-info-display');
+    const userInfo = document.querySelector('.sidebar-footer .user-info');
+    if (!resInfo) return;
+    
+    if (userInfo) userInfo.style.display = 'none';
+
+    const isEn = (window.currentLang === 'en');
+    const aptNum = (apt && apt.number) || (currentUser && currentUser.apartment_id) || '';
+    const ownerName = (apt && apt.owner_name) || '';
+    const area = (apt && apt.area_m2) ? `${apt.area_m2} ${isEn ? 'm²' : 'м²'}` : '—';
+    const email = (apt && apt.email) || (currentUser && currentUser.email) || '—';
+
+    resInfo.innerHTML = `
+        <div class="resident-card-box">
+            <div class="resident-header">
+                <div class="resident-address-title">${isEn ? '14 Mykhailo Hrushevsky St.' : 'вул. Михайла Грушевського, 14'}</div>
+                <div class="resident-apt-badge">${isEn ? 'Apt. #' : 'кв. №'}${aptNum}</div>
+            </div>
+            <div class="resident-details">
+                <div class="resident-owner">${ownerName || (isEn ? 'Owner' : 'Власник')}</div>
+                <div class="resident-meta">
+                    <i class="fas fa-vector-square" style="font-size: 0.75rem; opacity: 0.8;"></i>
+                    <span>${isEn ? 'Area:' : 'Площа:'} <b>${area}</b></span>
+                </div>
+                <div class="resident-email" title="${email}">
+                    <i class="far fa-envelope" style="font-size: 0.75rem; opacity: 0.8;"></i>
+                    <span>${email}</span>
+                </div>
+            </div>
+            <button type="button" onclick="logout()" class="btn-resident-logout">
+                <i class="fas fa-sign-out-alt"></i> ${isEn ? 'Sign out' : 'Вийти'}
+            </button>
+        </div>
+    `;
+    resInfo.style.display = 'block';
+};
+
 function applyRoleRestrictions() {
     if (!currentUser) return;
     
-    // Update Sidebar User Info
-    const userInfoSpan = document.querySelector('.sidebar-footer .user-info span');
-    if (userInfoSpan) {
-        if (currentUser.role === 'admin') {
-            userInfoSpan.textContent = `Адміністратор (${currentUser.email})`;
-        } else {
-            userInfoSpan.textContent = `Мешканець Кв. ${currentUser.apartment_id}`;
+    const userInfo = document.querySelector('.sidebar-footer .user-info');
+    const resInfo = document.getElementById('resident-info-display');
+    const isEn = (window.currentLang === 'en');
+
+    if (currentUser.role === 'admin') {
+        if (resInfo) resInfo.style.display = 'none';
+        if (userInfo) {
+            userInfo.style.display = 'flex';
+            userInfo.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                        <div class="avatar" style="font-size: 1.2rem;">👤</div>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <div style="font-weight: 600; font-size: 0.875rem; color: var(--text-primary);">${isEn ? 'Admin' : 'Адміністратор'}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-overflow: ellipsis; overflow: hidden;" title="${currentUser.email}">${currentUser.email}</div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="logout()" title="${isEn ? 'Sign out' : 'Вийти'}" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 5px 9px; font-size: 0.8125rem; border-radius: 6px; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'; this.style.borderColor='rgba(239,68,68,0.4)'" onmouseout="this.style.color='var(--text-secondary)'; this.style.borderColor='var(--border-color)'">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            `;
         }
-    }
-    
-    // Hide specific menu items for residents
-    if (currentUser.role === 'resident') {
-        const hidePages = ['transactions', 'reports', 'settings'];
+    } else if (currentUser.role === 'resident') {
+        // Hide specific menu items for residents (transactions, receipts, settings)
+        const hidePages = ['transactions', 'receipts', 'settings'];
         hidePages.forEach(page => {
             const el = document.querySelector(`.sidebar-nav li[data-page="${page}"]`);
             if (el) el.style.display = 'none';
         });
+
+        // Ensure charges is the first item in sidebar for residents
+        const navUl = document.querySelector('.sidebar-nav ul');
+        const chargesLi = document.querySelector('.sidebar-nav li[data-page="charges"]');
+        if (navUl && chargesLi && navUl.firstElementChild !== chargesLi) {
+            navUl.prepend(chargesLi);
+        }
+
+        // Immediately render resident card or fetch apartment info
+        if (currentUser.apartment_id) {
+            fetch(`/api/apartments/${currentUser.apartment_id}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(apt => {
+                    window.renderResidentSidebar(apt);
+                })
+                .catch(() => {
+                    window.renderResidentSidebar(null);
+                });
+        } else {
+            window.renderResidentSidebar(null);
+        }
     }
 }
 

@@ -4,7 +4,7 @@
         color: black !important;
         margin: 0;
         padding: 0;
-        font-family: Arial, sans-serif;
+        font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif !important;
         font-size: 9pt;
     }
     
@@ -14,7 +14,7 @@
     
     .print-container {
         display: block !important;
-        width: 100%;
+        width: 100% !important;
     }
     
     .receipt-grid {
@@ -78,10 +78,306 @@
         padding: 0 !important;
         width: 100% !important;
     }
+
+    /* ── Debtors List Print Styling ── */
+    .debtors-print-container {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: avoid !important;
+        font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif !important;
+    }
+
+    .debtors-print-container,
+    .debtors-print-container * {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        box-sizing: border-box !important;
+    }
+
+    .debtors-print-container .sort-arrow {
+        display: none !important;
+    }
+
+    .debtors-print-container .debtors-header {
+        text-align: center !important;
+        margin-bottom: 3.5mm !important;
+    }
+
+    .debtors-print-container .debtors-title {
+        font-size: 20pt !important;
+        font-weight: 900 !important;
+        color: #000000 !important;
+        margin: 0 0 1.5mm 0 !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+        line-height: 1.1 !important;
+    }
+
+    .debtors-print-container .debtors-subtitle {
+        font-size: 13pt !important;
+        font-weight: 700 !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        line-height: 1.2 !important;
+    }
+
+    .debtors-print-container .debtors-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        text-align: left !important;
+    }
+
+    .debtors-print-container .debtors-table th {
+        border-top: 2.5px solid #000000 !important;
+        border-bottom: 2.5px solid #000000 !important;
+        background-color: #ededed !important;
+        color: #000000 !important;
+        font-size: 13pt !important;
+        font-weight: 900 !important;
+        padding: 4.5px 8px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .debtors-print-container .debtors-table th.th-debt {
+        text-align: right !important;
+    }
+
+    .debtors-print-container .debtors-table td {
+        border-bottom: 1px solid #000000 !important;
+        color: #000000 !important;
+        line-height: 1.25 !important;
+    }
+
+    .debtors-print-container .debtors-table .debtors-total-row td {
+        border-top: 2.5px solid #000000 !important;
+        border-bottom: 2.5px solid #000000 !important;
+        background-color: #ededed !important;
+        color: #000000 !important;
+        font-weight: 900 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Size variants */
+    /* 1. Extra Large (<= 18 debtors) */
+    .debtors-size-xl .debtors-title {
+        font-size: 22pt !important;
+    }
+    .debtors-size-xl .debtors-subtitle {
+        font-size: 14pt !important;
+    }
+    .debtors-size-xl .debtors-table th {
+        font-size: 14pt !important;
+        padding: 6px 10px !important;
+    }
+    .debtors-size-xl .debtors-table td {
+        padding: 5.5px 10px !important;
+    }
+    .debtors-size-xl .debtor-apt {
+        font-size: 16pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-xl .debtor-owner {
+        font-size: 13pt !important;
+        font-weight: 600 !important;
+    }
+    .debtors-size-xl .debtor-amount {
+        font-size: 16pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-xl .debtors-total-row td {
+        font-size: 16pt !important;
+        padding: 7px 10px !important;
+    }
+
+    /* 2. Large (19 - 26 debtors) */
+    .debtors-size-lg .debtors-title {
+        font-size: 19pt !important;
+    }
+    .debtors-size-lg .debtors-subtitle {
+        font-size: 12.5pt !important;
+    }
+    .debtors-size-lg .debtors-table th {
+        font-size: 12.5pt !important;
+        padding: 4px 8px !important;
+    }
+    .debtors-size-lg .debtors-table td {
+        padding: 3.5px 8px !important;
+    }
+    .debtors-size-lg .debtor-apt {
+        font-size: 14pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-lg .debtor-owner {
+        font-size: 12pt !important;
+        font-weight: 600 !important;
+    }
+    .debtors-size-lg .debtor-amount {
+        font-size: 14pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-lg .debtors-total-row td {
+        font-size: 14pt !important;
+        padding: 5px 8px !important;
+    }
+
+    /* 3. Two columns (> 26 debtors) */
+    .debtors-size-two-cols .debtors-cols-wrap {
+        display: flex !important;
+        gap: 6mm !important;
+        align-items: flex-start !important;
+    }
+    .debtors-size-two-cols .debtors-cols-wrap .debtors-table {
+        flex: 1 !important;
+    }
+    .debtors-size-two-cols .debtors-title {
+        font-size: 17pt !important;
+    }
+    .debtors-size-two-cols .debtors-subtitle {
+        font-size: 11pt !important;
+    }
+    .debtors-size-two-cols .debtors-table th {
+        font-size: 10.5pt !important;
+        padding: 2.5px 5px !important;
+    }
+    .debtors-size-two-cols .debtors-table td {
+        padding: 2px 5px !important;
+    }
+    .debtors-size-two-cols .debtor-apt {
+        font-size: 11.5pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-two-cols .debtor-owner {
+        font-size: 10pt !important;
+        font-weight: 600 !important;
+    }
+    .debtors-size-two-cols .debtor-amount {
+        font-size: 11.5pt !important;
+        font-weight: 900 !important;
+    }
+    .debtors-size-two-cols .debtors-total-bar {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 2.5mm 4mm !important;
+        margin-top: 3mm !important;
+        border-top: 2.5px solid #000000 !important;
+        border-bottom: 2.5px solid #000000 !important;
+        background-color: #ededed !important;
+        font-weight: 900 !important;
+        font-size: 12pt !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* ── Charges & Payments Report Print Styling ── */
+    .charges-print-container {
+        display: block !important;
+        width: 100% !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif !important;
+    }
+    .charges-print-container * {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+    }
+    .charges-print-header {
+        text-align: center !important;
+        margin-bottom: 5mm !important;
+    }
+    .charges-print-org {
+        font-size: 9.5pt !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        color: #333333 !important;
+        letter-spacing: 0.5px !important;
+    }
+    .charges-print-title {
+        font-size: 14pt !important;
+        font-weight: 900 !important;
+        margin: 2mm 0 !important;
+        text-transform: uppercase !important;
+    }
+    .charges-print-subtitle {
+        font-size: 9.5pt !important;
+        font-weight: 600 !important;
+        color: #222222 !important;
+    }
+    .charges-print-info-bar {
+        display: flex !important;
+        gap: 15mm !important;
+        font-size: 9.5pt !important;
+        margin-bottom: 4mm !important;
+        padding: 2mm 3mm !important;
+        background: #f0f0f0 !important;
+        border: 1px solid #999999 !important;
+        border-radius: 3px !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    .charges-print-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 8.5pt !important;
+        margin-bottom: 5mm !important;
+    }
+    .charges-print-table th {
+        background-color: #e5e5e5 !important;
+        border: 1.5px solid #000000 !important;
+        padding: 4px 6px !important;
+        font-weight: 800 !important;
+        text-align: left !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    .charges-print-table td {
+        border: 1px solid #444444 !important;
+        padding: 3.5px 6px !important;
+        line-height: 1.25 !important;
+    }
+    .charges-print-table thead {
+        display: table-header-group !important;
+    }
+    .charges-print-table tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    .charges-print-table .text-right {
+        text-align: right !important;
+    }
+    .charges-print-table .charges-total-row td {
+        background-color: #e5e5e5 !important;
+        font-weight: 900 !important;
+        border-top: 2px solid #000000 !important;
+        border-bottom: 2px solid #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    .charges-print-card {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-bottom: 8mm !important;
+    }
+    .charges-print-divider {
+        border-bottom: 2px dashed #666666 !important;
+        margin-bottom: 8mm !important;
+        padding-bottom: 6mm !important;
+    }
 }
 
 @page {
-    margin: 10mm;
+    margin: 8mm 10mm;
     size: A4 portrait;
 }
 

@@ -4,10 +4,43 @@ from sqlalchemy import func
 from typing import List, Dict, Any
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import json
 from ..database import get_db
 from .. import models, schemas
 
 router = APIRouter()
+
+@router.get("/scenarios/config")
+def get_scenarios_config(db: Session = Depends(get_db)):
+    setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "scenario_plans").first()
+    if not setting or not setting.value:
+        return {
+            "scenario_params": {
+                "1": {"tariff": 4.4, "collection": 85},
+                "2": {"tariff": 8.0, "collection": 85},
+                "3": {"tariff": 12.0, "collection": 85}
+            },
+            "excluded_activities": {
+                "1": [14, 17, 12],
+                "2": [12],
+                "3": []
+            }
+        }
+    try:
+        return json.loads(setting.value)
+    except Exception:
+        return {"scenario_params": {}, "excluded_activities": {}}
+
+@router.post("/scenarios/config")
+def save_scenarios_config(payload: Dict[str, Any], db: Session = Depends(get_db)):
+    setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "scenario_plans").first()
+    if not setting:
+        setting = models.SystemSetting(key="scenario_plans", value=json.dumps(payload, ensure_ascii=False))
+        db.add(setting)
+    else:
+        setting.value = json.dumps(payload, ensure_ascii=False)
+    db.commit()
+    return {"ok": True, "message": "Scenarios config saved successfully"}
 
 @router.get("/activities", response_model=List[schemas.PlannedActivityResponse])
 def get_planned_activities(db: Session = Depends(get_db)):

@@ -9,3 +9,5 @@ rapidfuzz
 python-dotenv
 google-auth
 PyJWT
+psycopg2-binary
+gunicorn

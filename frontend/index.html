@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HOA Accounting - Financial System</title>
-    <link rel="stylesheet" href="style.css?v=8">
-    <link rel="stylesheet" href="print.css" media="print">
+    <title>ЖБК № 102 «Заполяр'є»</title>
+    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="print.css?v=4" media="print">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -20,8 +20,8 @@
     <div id="login-overlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-main, #0f172a); z-index: 9999; display: flex; justify-content: center; align-items: center;">
         <div class="login-box" style="background: var(--bg-card, #1e293b); padding: 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid var(--border-color, #334155); width: 400px; max-width: 90%;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">🏠</div>
-            <h2 style="margin-bottom: 0.5rem; color: var(--text-primary, #f8fafc);">HOA Accounting</h2>
-            <p style="margin-bottom: 2rem; color: var(--text-secondary, #94a3b8);">Вхід в систему</p>
+            <h2 style="margin-bottom: 0.5rem; color: var(--text-primary, #f8fafc);">ЖБК № 102 «Заполяр'є»</h2>
+            <p style="margin-bottom: 2rem; color: var(--text-secondary, #94a3b8);">Вхід до системи</p>
             <div id="g_id_onload"
                  data-client_id="813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com"
                  data-context="signin"
@@ -48,76 +48,83 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <div class="logo-icon">🏠</div>
-                    <span>HOA Accounting</span>
+                    <span>ЖБК № 102 «Заполяр'є»</span>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li class="active" data-page="dashboard"><a href="#"><i class="fas fa-chart-line"></i> Головна</a></li>
+                    <li class="active" data-page="reports"><a href="#"><i class="fas fa-chart-pie"></i> Звіти</a></li>
+                    <li data-page="forecast"><a href="#"><i class="fas fa-chart-line"></i> Прогноз</a></li>
                     <li data-page="transactions"><a href="#"><i class="fas fa-exchange-alt"></i> Транзакції</a></li>
                     <li data-page="charges"><a href="#"><i class="fas fa-file-invoice-dollar"></i> Нарахування</a></li>
-                    <li data-page="reports"><a href="#"><i class="fas fa-print"></i> Друк</a></li>
+                    <li data-page="receipts"><a href="#"><i class="fas fa-receipt"></i> Квитанції</a></li>
                     <li data-page="settings"><a href="#"><i class="fas fa-cog"></i> Налаштування</a></li>
+                    <li data-page="help"><a href="#"><i class="fas fa-life-ring"></i> Допомога</a></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-info">
                     <div class="avatar">👤</div>
-                    <span>Administrator</span>
+                    <span>Адміністратор</span>
                 </div>
-                <div id="resident-info-display" style="display: none; margin-top: 0.8rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.8rem"></div>
+                <div id="resident-info-display" style="display: none;"></div>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header">
-                <h1 id="page-title">Dashboard</h1>
+                <h1 id="page-title">Головна</h1>
                 <div class="header-actions">
-                    <button class="btn btn-secondary" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><i class="fas fa-sun"></i></button>
+                    <button class="btn btn-secondary" id="theme-toggle" onclick="toggleTheme()" title="Перемкнути тему"><i class="fas fa-sun"></i></button>
                     <button class="btn btn-primary" id="btn-recalculate">
-                        <i class="fas fa-sync"></i> Recalculate
+                        <i class="fas fa-sync"></i> <span>Перерахувати</span>
                     </button>
-                    <div class="period-selector-container custom-dropdown-container" style="position: relative;">
-                        <button id="custom-period-btn" class="btn btn-secondary" style="width: 260px; text-align: left; background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--accent-color); padding: 0.5rem 1rem; border-radius: 6px; outline: none; display: flex; justify-content: space-between; align-items: center;">
-                            <span><i class="far fa-calendar-alt"></i> <span id="custom-period-text">Select period...</span></span>
-                            <i class="fas fa-caret-down"></i>
-                        </button>
-                        
-                        <div id="custom-period-dropdown" class="period-dropdown" style="display: none; position: absolute; top: 110%; right: 0; background: var(--dropdown-bg, rgba(20, 28, 36, 0.95)); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); width: 260px; z-index: 1000; backdrop-filter: blur(16px);">
-                            <div id="period-menu-main" class="period-menu-page">
-                                <div class="period-menu-item" data-action="last7"><i class="fas fa-check check-icon" style="opacity: 0"></i> Last 7 days</div>
-                                <div class="period-menu-item" data-action="today"><i class="fas fa-check check-icon" style="opacity: 0"></i> Today</div>
-                                <div class="period-menu-item" data-action="yesterday"><i class="fas fa-check check-icon" style="opacity: 0"></i> Yesterday</div>
-                                <div class="period-menu-item" data-action="thisMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> This month</div>
-                                <div class="period-menu-item" data-action="prevMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Last month</div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-month"><span>Month</span> <i class="fas fa-chevron-right"></i></div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-quarter"><span>Quarter</span> <i class="fas fa-chevron-right"></i></div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-year"><span>Year</span> <i class="fas fa-chevron-right"></i></div>
-                                <div class="period-menu-item has-submenu" data-target="period-menu-custom"><span><i class="far fa-calendar-alt"></i> Період</span> <i class="fas fa-chevron-right"></i></div>
-                            </div>
+                    <div class="period-selector-wrapper" style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                        <span style="font-size: 0.75rem; color: var(--accent-color); font-weight: 600; display: flex; align-items: center; gap: 5px; user-select: none;">
+                            <i class="far fa-calendar-alt"></i> <span id="period-selector-label-text">Період звітності (натисніть щоб змінити):</span>
+                        </span>
+                        <div class="period-selector-container custom-dropdown-container" style="position: relative;">
+                            <button id="custom-period-btn" class="btn btn-secondary" style="width: 275px; text-align: left; background: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--accent-color); padding: 0.5rem 1rem; border-radius: 6px; outline: none; display: flex; justify-content: space-between; align-items: center;" title="Натисніть для вибору періоду звітності (місяць, квартал, рік або довільні дати)">
+                                <span><i class="far fa-calendar-alt" style="color: var(--accent-color); margin-right: 4px;"></i> <span id="custom-period-text">Оберіть період...</span></span>
+                                <i class="fas fa-caret-down" style="color: var(--accent-color);"></i>
+                            </button>
                             
-                            <div id="period-menu-year" class="period-menu-page" style="display: none;">
-                                <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Рік</div>
-                                <div id="year-options-container" class="period-options-list"></div>
-                            </div>
+                            <div id="custom-period-dropdown" class="period-dropdown" style="display: none; position: absolute; top: 110%; right: 0; background: var(--dropdown-bg, rgba(20, 28, 36, 0.95)); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); width: 260px; z-index: 1000; backdrop-filter: blur(16px);">
+                                <div id="period-menu-main" class="period-menu-page">
+                                    <div class="period-menu-item" data-action="last7"><i class="fas fa-check check-icon" style="opacity: 0"></i> Останні 7 днів</div>
+                                    <div class="period-menu-item" data-action="today"><i class="fas fa-check check-icon" style="opacity: 0"></i> Сьогодні</div>
+                                    <div class="period-menu-item" data-action="yesterday"><i class="fas fa-check check-icon" style="opacity: 0"></i> Вчора</div>
+                                    <div class="period-menu-item" data-action="thisMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Поточний місяць</div>
+                                    <div class="period-menu-item" data-action="prevMonth"><i class="fas fa-check check-icon" style="opacity: 0"></i> Минулий місяць</div>
+                                    <div class="period-menu-item has-submenu" data-target="period-menu-month"><span>Місяць</span> <i class="fas fa-chevron-right"></i></div>
+                                    <div class="period-menu-item has-submenu" data-target="period-menu-quarter"><span>Квартал</span> <i class="fas fa-chevron-right"></i></div>
+                                    <div class="period-menu-item has-submenu" data-target="period-menu-year"><span>Рік</span> <i class="fas fa-chevron-right"></i></div>
+                                    <div class="period-menu-item has-submenu" data-target="period-menu-custom"><span><i class="far fa-calendar-alt"></i> Період</span> <i class="fas fa-chevron-right"></i></div>
+                                </div>
+                                
+                                <div id="period-menu-year" class="period-menu-page" style="display: none;">
+                                    <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Рік</div>
+                                    <div id="year-options-container" class="period-options-list"></div>
+                                </div>
 
-                            <div id="period-menu-quarter" class="period-menu-page" style="display: none;">
-                                <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Квартал</div>
-                                <div id="quarter-options-container" class="period-options-list"></div>
-                            </div>
+                                <div id="period-menu-quarter" class="period-menu-page" style="display: none;">
+                                    <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Квартал</div>
+                                    <div id="quarter-options-container" class="period-options-list"></div>
+                                </div>
 
-                            <div id="period-menu-month" class="period-menu-page" style="display: none;">
-                                <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Місяць</div>
-                                <div id="month-options-container" class="period-options-list"></div>
-                            </div>
+                                <div id="period-menu-month" class="period-menu-page" style="display: none;">
+                                    <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Місяць</div>
+                                    <div id="month-options-container" class="period-options-list"></div>
+                                </div>
 
-                            <div id="period-menu-custom" class="period-menu-page" style="display: none; width: auto; min-width: 600px; right: 0; position: absolute; background: var(--dropdown-bg, rgba(20, 28, 36, 0.95)); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); backdrop-filter: blur(16px);">
-                                <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Період</div>
-                                <div id="litepicker-container" style="padding: 1rem;"></div>
-                                <div style="display: flex; justify-content: flex-start; gap: 10px; padding: 1rem; border-top: 1px solid var(--border-color);">
-                                    <button class="btn btn-primary" id="custom-period-apply">Apply</button>
-                                    <button class="btn btn-secondary" id="custom-period-cancel">Cancel</button>
+                                <div id="period-menu-custom" class="period-menu-page" style="display: none; width: auto; min-width: 600px; right: 0; position: absolute; background: var(--dropdown-bg, rgba(20, 28, 36, 0.95)); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); backdrop-filter: blur(16px);">
+                                    <div class="period-menu-header" data-back="period-menu-main"><i class="fas fa-arrow-left"></i> Період</div>
+                                    <div id="litepicker-container" style="padding: 1rem;"></div>
+                                    <div style="display: flex; justify-content: flex-start; gap: 10px; padding: 1rem; border-top: 1px solid var(--border-color);">
+                                        <button class="btn btn-primary" id="custom-period-apply">Застосувати</button>
+                                        <button class="btn btn-secondary" id="custom-period-cancel">Скасувати</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -143,8 +150,8 @@
                 <!-- Form content -->
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary close-modal">Cancel</button>
-                <button class="btn btn-primary" id="modal-submit">Save</button>
+                <button class="btn btn-secondary close-modal">Скасувати</button>
+                <button class="btn btn-primary" id="modal-submit">Зберегти</button>
             </div>
         </div>
     </div>
@@ -161,16 +168,201 @@
                 <!-- Months will be injected by JS -->
             </div>
             <div style="padding: 0.5rem; background: var(--bg-card);">
-                <button class="btn btn-secondary" style="width: 100%" onclick="closeMonthPicker()">Cancel</button>
+                <button class="btn btn-secondary" style="width: 100%" onclick="closeMonthPicker()">Скасувати</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 10000;">
+        <div class="custom-modal" style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-color); width: 520px; max-width: 95vw; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-credit-card" style="color: var(--accent-color); font-size: 1.2rem;"></i>
+                    <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);">Оплата заборгованості ЖБК</h3>
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="window.closePaymentModal()" style="padding: 4px 8px; border-radius: 6px;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div style="padding: 1.5rem;">
+                <!-- Amount Banner -->
+                <div class="pay-amount-banner" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.1rem; text-align: center; margin-bottom: 1.25rem;">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;" id="pay-modal-apt-info">кв. №—</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #ef4444;" id="pay-modal-amount">0.00 ₴</div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 4px;">ЖБК № 102 «Заполяр'є» (вул. М. Грушевського, 14)</div>
+                </div>
+
+                <!-- Tabs -->
+                <div style="display: flex; gap: 6px; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <button class="btn btn-sm pay-tab-btn active" id="tab-btn-qr" onclick="window.switchPayTab('qr')" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 12px;">
+                        <i class="fas fa-qrcode"></i> QR-код НБУ
+                    </button>
+                    <button class="btn btn-sm pay-tab-btn btn-secondary" id="tab-btn-gpay" onclick="window.switchPayTab('gpay')" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 12px;">
+                        <i class="fab fa-google-pay"></i> Google Pay / Картка
+                    </button>
+                    <button class="btn btn-sm pay-tab-btn btn-secondary" id="tab-btn-iban" onclick="window.switchPayTab('iban')" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 12px;">
+                        <i class="fas fa-university"></i> Реквізити IBAN
+                    </button>
+                </div>
+
+                <!-- Tab 1: QR-код НБУ -->
+                <div id="pay-tab-content-qr" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+                    <div style="background: #ffffff; padding: 10px; border-radius: 12px; border: 2px solid var(--accent-color); margin-bottom: 1rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                        <img id="pay-qr-code-img" src="" alt="QR-код НБУ" style="width: 190px; height: 190px; display: block;">
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 1rem; max-width: 380px;">
+                        Відкрийте <b>Приват24</b>, <b>monobank</b> або додаток будь-якого банку та відскануйте QR-код. Реквізити ЖБК, сума та номер квартири заповняться автоматично!
+                    </p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%;">
+                        <a id="pay-privat-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="background: #10b981; border-color: #10b981; border-radius: 8px; font-weight: 600;">
+                            <i class="fas fa-external-link-alt"></i> Сплатити в Приват24
+                        </a>
+                        <button class="btn btn-secondary btn-sm" onclick="window.copyPaymentDetails()" style="border-radius: 8px;">
+                            <i class="fas fa-copy"></i> Скопіювати реквізити
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Google Pay / Картка -->
+                <div id="pay-tab-content-gpay" style="display: none; flex-direction: column; align-items: center; text-align: center; padding: 1rem 0;">
+                    <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">
+                        <i class="fab fa-google-pay" style="color: #4285f4;"></i>
+                        <i class="fab fa-cc-apple-pay" style="color: var(--text-primary); margin-left: 12px;"></i>
+                        <i class="fab fa-cc-visa" style="color: #1a1f71; background: #fff; border-radius: 4px; padding: 0 4px; margin-left: 12px;"></i>
+                        <i class="fab fa-cc-mastercard" style="color: #eb001b; margin-left: 12px;"></i>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #d97706; padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.75rem;">
+                        <i class="fas fa-tools"></i> В роботі: Підключення мерчанта ЖБК
+                    </div>
+                    <h4 style="font-size: 1rem; color: var(--text-primary); margin-bottom: 0.5rem;">Пряма онлайн-оплата карткою</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 1rem; max-width: 380px;">
+                        Пряма оплата карткою через Google Pay / Apple Pay знаходиться на етапі підключення та верифікації документів банку. Наразі рекомендуємо скористатися <b>QR-кодом НБУ</b> (миттєво і 0% комісії).
+                    </p>
+                    <button class="btn btn-primary" onclick="window.switchPayTab('qr')" style="border-radius: 8px; padding: 0.6rem 1.5rem; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-qrcode"></i> Перейти до оплати по QR-коду
+                    </button>
+                    <div id="pay-gpay-status" style="margin-top: 1rem; font-size: 0.85rem; color: #10b981; display: none;"></div>
+                </div>
+
+                <!-- Tab 3: Реквізити IBAN -->
+                <div id="pay-tab-content-iban" style="display: none;">
+                    <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; font-size: 0.85rem; line-height: 1.6; margin-bottom: 1rem;">
+                        <div><b>Отримувач:</b> ЖБК № 102 «Заполяр'є»</div>
+                        <div><b>Код ЄДРПОУ:</b> <span id="pay-edrpou-val">23025161</span> <button class="btn btn-sm btn-secondary" style="padding: 1px 6px; font-size: 0.75rem; margin-left: 6px;" onclick="window.copyText('23025161', 'ЄДРПОУ')"><i class="fas fa-copy"></i></button></div>
+                        <div><b>Рахунок IBAN:</b> <br><span id="pay-iban-val" style="font-family: monospace; font-size: 0.95rem; color: var(--accent-color);">UA803052990000026005050281468</span> <button class="btn btn-sm btn-secondary" style="padding: 1px 6px; font-size: 0.75rem; margin-left: 6px;" onclick="window.copyText('UA803052990000026005050281468', 'IBAN')"><i class="fas fa-copy"></i></button></div>
+                        <div><b>Банк:</b> АТ КБ "ПРИВАТБАНК"</div>
+                        <div><b>Призначення:</b> <span id="pay-purpose-val">Оплата комунальних послуг</span></div>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="window.copyPaymentDetails()" style="width: 100%; border-radius: 8px;">
+                        <i class="fas fa-copy"></i> Скопіювати всі реквізити в буфер
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Viewer Modal -->
+    <div id="pdf-viewer-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 10001; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+        <div style="background: var(--bg-card); width: 92vw; max-width: 1100px; height: 88vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.03);">
+                <div style="display: flex; align-items: center; gap: 10px; overflow: hidden;">
+                    <i class="fas fa-file-pdf" style="color: #ef4444; font-size: 1.3rem;"></i>
+                    <h3 id="pdf-viewer-title" style="margin: 0; font-size: 1.05rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Звіт</h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <a id="pdf-viewer-download-btn" href="#" target="_blank" class="btn btn-sm btn-secondary" style="border-radius: 8px; font-size: 0.8rem; padding: 6px 12px;">
+                        <i class="fas fa-download"></i> Завантажити
+                    </a>
+                    <button class="btn btn-sm btn-secondary" onclick="window.closePdfViewerModal()" style="border-radius: 8px; padding: 6px 10px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div style="flex: 1; position: relative; background: #333;">
+                <iframe id="pdf-viewer-frame" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Report Modal -->
+    <div id="upload-report-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 10000;">
+        <div class="custom-modal" style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-color); width: 480px; max-width: 95vw; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color);">
+                <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);"><i class="fas fa-upload" style="color: var(--accent-color); margin-right: 8px;"></i> Завантажити звіт ЖБК (PDF)</h3>
+                <button class="btn btn-sm btn-secondary" onclick="window.closeUploadReportModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="upload-report-form" onsubmit="window.handleUploadReport(event)" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <div class="form-group">
+                    <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Назва звіту / документа *</label>
+                    <input type="text" id="report-form-title" class="form-control" style="width: 100%;" required placeholder="Напр. Звіт ревізійної комісії за 2025 рік">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Рік *</label>
+                        <input type="number" id="report-form-year" class="form-control" style="width: 100%;" required value="2026" min="2000" max="2050">
+                    </div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Тип звіту</label>
+                        <select id="report-form-period" class="form-control" style="width: 100%;">
+                            <option value="Річний звіт">Річний звіт</option>
+                            <option value="Акт ревізії">Акт ревізії</option>
+                            <option value="Кошторис">Кошторис</option>
+                            <option value="Звіт правління">Звіт правління</option>
+                            <option value="Інше">Інше</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Примітка (необов'язково)</label>
+                    <input type="text" id="report-form-note" class="form-control" style="width: 100%;" placeholder="Напр. Затверджено протоколом №2">
+                </div>
+                <div class="form-group">
+                    <label style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">PDF файл *</label>
+                    <input type="file" id="report-form-file" accept=".pdf" class="form-control" style="width: 100%;" required>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="window.closeUploadReportModal()">Скасувати</button>
+                    <button type="submit" id="btn-submit-report-upload" class="btn btn-primary"><i class="fas fa-upload"></i> Завантажити</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resident Receipt Modal -->
+    <div id="resident-receipt-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 10001; background: rgba(0,0,0,0.75); backdrop-filter: blur(5px);">
+        <div class="custom-modal" style="background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-color); width: 440px; max-width: 95vw; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 15px 50px rgba(0,0,0,0.6);">
+            <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.1);">
+                <h3 style="margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-file-invoice" style="color: var(--accent-color);"></i>
+                    <span id="res-receipt-modal-title">Квитанція на оплату</span>
+                </h3>
+                <button type="button" onclick="window.closeResidentReceiptModal()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.4rem; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+            </div>
+            <div id="res-receipt-modal-body" style="padding: 1.25rem; overflow-y: auto; flex-grow: 1; display: flex; justify-content: center; background: var(--bg-main);">
+                <!-- Receipt content rendered here -->
+            </div>
+            <div style="padding: 0.85rem 1.25rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); gap: 10px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.closeResidentReceiptModal()" style="padding: 6px 14px; font-size: 0.8125rem;">
+                    Закрити
+                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="window.downloadResidentReceiptPdf()" style="padding: 6px 12px; font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-file-pdf" style="color: #ef4444;"></i> PDF
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="window.printResidentSingleReceiptAction()" style="padding: 6px 14px; font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-print"></i> Друкувати
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="print-container" id="print-area"></div>
 
-    <script src="auth.js?v=2"></script>
-    <script src="lang.js?v=1"></script>
-    <script src="app.js?v=38"></script>
+    <script src="html2pdf.bundle.min.js"></script>
+    <script src="auth.js?v=6"></script>
+    <script src="lang.js?v=7"></script>
+    <script src="app.js?v=62"></script>
 
 </body>
 </html>
