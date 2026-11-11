@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: zhbk102-app
+    name: polarity102-app
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -12,6 +12,8 @@ services:
         generateValue: true
       - key: GOOGLE_CLIENT_ID
         value: 813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com
+      - key: GMAIL_TOKEN_JSON
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: zhbk102-db

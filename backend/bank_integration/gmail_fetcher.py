@@ -24,10 +24,19 @@ def get_gmail_service():
         raise ImportError("Google API client libraries not installed. Run: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
 
     creds = None
+    token_json_str = os.getenv('GMAIL_TOKEN_JSON')
     token_path = os.getenv('GMAIL_TOKEN', 'token.json')
     creds_path = os.getenv('GMAIL_CREDENTIALS', 'credentials.json')
 
-    if os.path.exists(token_path):
+    if token_json_str:
+        try:
+            import json
+            token_data = json.loads(token_json_str)
+            creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+        except Exception as e:
+            logger.warning(f"Failed to load credentials from GMAIL_TOKEN_JSON: {e}")
+
+    if not creds and os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     
     if not creds or not creds.valid:
@@ -45,12 +54,18 @@ def get_gmail_service():
 
         if not creds:
             if not os.path.exists(creds_path):
-                raise FileNotFoundError(f"Credentials file {creds_path} not found.")
-            flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-            creds = flow.run_local_server(port=0)
+                raise FileNotFoundError("Для синхронізації з Gmail на хмарному сервері додайте змінну оточення GMAIL_TOKEN_JSON в налаштуваннях Render.")
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+                creds = flow.run_local_server(port=0, open_browser=False)
+            except Exception as e:
+                raise RuntimeError("Не вдалося виконати інтерактивну авторизацію Gmail у хмарі (відсутній браузер). Будь ласка, вкажіть GMAIL_TOKEN_JSON у Environment Variables на Render.") from e
             
-        with open(token_path, 'w') as token:
-            token.write(creds.to_json())
+        try:
+            with open(token_path, 'w') as token:
+                token.write(creds.to_json())
+        except Exception as write_err:
+            logger.debug(f"Could not save refreshed token to file: {write_err}")
 
     return build('gmail', 'v1', credentials=creds)
 
