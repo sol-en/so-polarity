@@ -101,7 +101,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     initNavigation();
-    const initialPage = (currentUser && currentUser.role === 'resident') ? 'charges' : 'reports';
+    
+    // Check for Gmail OAuth return params
+    const urlParams = new URLSearchParams(window.location.search);
+    let initialPage = (currentUser && currentUser.role === 'resident') ? 'charges' : 'reports';
+    if (urlParams.get('gmail_auth') === 'success') {
+        const email = urlParams.get('email');
+        setTimeout(() => {
+            alert(email ? `✅ Gmail успішно авторизовано!\nПідключено акаунт: ${email}` : '✅ Gmail успішно авторизовано!');
+        }, 400);
+        initialPage = 'settings';
+        window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
+    } else if (urlParams.get('gmail_auth_error')) {
+        const err = decodeURIComponent(urlParams.get('gmail_auth_error'));
+        setTimeout(() => {
+            alert('⚠️ Помилка авторизації Gmail:\n' + err);
+        }, 400);
+        initialPage = 'settings';
+        window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
+    } else if (window.location.hash === '#settings') {
+        initialPage = 'settings';
+    }
+
     loadPage(initialPage);
     document.querySelectorAll('.close-modal').forEach(btn => { btn.onclick = closeModal; });
 
@@ -4462,35 +4483,38 @@ async function renderSettings() {
                 <button class="btn btn-primary" style="margin-top: auto;" onclick="showAddContractorModal()">+ Додати контрагента</button>
             </div>`,
         'card-gmail': `
-            <div class="stat-card draggable-card" id="card-gmail" draggable="true" style="display: flex; flex-direction: column; border: 2px dashed transparent; transition: all 0.3s ease; resize: both; overflow: hidden; min-width: 200px; min-height: 150px; cursor: grab; flex-grow: 1;">
-                <h3>Інтеграція з Gmail</h3>
-                <div id="gmail-status" style="margin: 1rem 0 0 0; font-size: 0.95rem;">
+            <div class="stat-card draggable-card" id="card-gmail" draggable="true" style="display: flex; flex-direction: column; border: 2px dashed transparent; transition: all 0.3s ease; resize: both; overflow: hidden; min-width: 250px; min-height: 200px; cursor: grab; flex-grow: 1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <h3 style="margin: 0;"><i class="fab fa-google" style="color: #ea4335; margin-right: 0.5rem;"></i>Інтеграція з Gmail</h3>
+                </div>
+                
+                <div id="gmail-status" style="margin: 0.5rem 0 1rem 0; font-size: 0.95rem;">
                     <div class="loader">Перевірка статусу...</div>
                 </div>
-                <div style="margin:1rem 0; color: var(--text-secondary); font-size: 0.9rem;">
-                    Для автоматичного завантаження реєстрів потрібен <b>credentials.json</b>.
-                </div>
-                <div class="drop-zone-content" style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(255,255,255,0.02); cursor: pointer;" onclick="document.getElementById('gmail-creds-upload').click()">
-                    <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 1rem;"></i>
-                    <p style="margin: 0; color: var(--text-secondary); text-align: center;">Перетягніть файл credentials.json сюди або <b>натисніть</b></p>
+
+                <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Ключ API (credentials.json):</span>
+                        <a href="javascript:void(0)" onclick="document.getElementById('gmail-creds-upload').click()" style="font-size: 0.85rem; color: var(--primary-color); text-decoration: none;">
+                            <i class="fas fa-upload"></i> Оновити файл
+                        </a>
+                    </div>
                     <input type="file" id="gmail-creds-upload" accept=".json" style="display:none" onchange="uploadGmailCreds(event)">
-                </div>
-                <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.5rem;">
-                    <a href="javascript:void(0)" onclick="toggleGmailHelp()" style="font-size: 0.85rem; color: var(--primary-color); text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
-                        <i class="fas fa-question-circle"></i> Інструкція: Що робити, якщо авторизація злітає?
+
+                    <a href="javascript:void(0)" onclick="toggleGmailHelp()" style="font-size: 0.85rem; color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem;">
+                        <i class="fas fa-question-circle"></i> Налаштування Google Cloud & Redirect URI
                     </a>
-                    <div id="gmail-help-content" style="display: none; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 4px;">
-                        <p style="margin: 0 0 0.5rem 0;"><b>1. Чому злітає авторизація?</b><br>
-                        Якщо ваш проєкт Google Cloud перебуває в режимі тестування (Testing), Google анулює токен оновлення кожні <b>7 днів</b>.</p>
+                    <div id="gmail-help-content" style="display: none; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <p style="margin: 0 0 0.5rem 0;"><b>1. Як підключити пошту для виписок:</b><br>
+                        Натисніть кнопку <b>"Авторизувати Gmail"</b> та оберіть акаунт Google, на який надходять банківські виписки та реєстри ЖБК.</p>
                         
-                        <p style="margin: 0 0 0.5rem 0;"><b>2. Як відновити авторизацію?</b><br>
-                        Натисніть кнопку <i>"Скинути токен / Змінити акаунт"</i> вище, а потім запустіть Синхронізацію Gmail на головній сторінці. У браузері відкриється вікно Google для входу. Увійдіть через ваш адміністраторський Google-акаунт.</p>
-                        
-                        <p style="margin: 0 0 0.5rem 0;"><b>3. Що робити, якщо видалився credentials.json?</b><br>
-                        1. Зайдіть у <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--primary-color)">Google Cloud Console</a>.<br>
-                        2. Перейдіть у розділ <b>APIs & Services</b> → <b>Credentials</b>.<br>
-                        3. Знайдіть свій клієнт OAuth 2.0 (тип Desktop app) та завантажте його JSON-файл.<br>
-                        4. Перетягніть цей файл у зону вище або натисніть на неї для завантаження.</p>
+                        <p style="margin: 0 0 0.5rem 0;"><b>2. Authorized Redirect URI (для Google Cloud Console):</b><br>
+                        Якщо налаштовуєте новий OAuth-клієнт у Google Cloud Console, додайте цей URI у розділ <i>Authorized redirect URIs</i>:<br>
+                        <code id="gmail-redirect-uri-display" style="display:block; padding: 0.4rem; background: rgba(0,0,0,0.3); border-radius: 4px; word-break: break-all; margin-top: 0.25rem; user-select: all;">https://polarity102-app.onrender.com/api/bank/gmail-callback</code>
+                        </p>
+
+                        <p style="margin: 0;"><b>3. Що робити, якщо авторизація злітає кожні 7 днів?</b><br>
+                        Якщо ваш проєкт у Google Cloud перебуває в режимі <i>Testing</i>, токен закінчується за 7 днів. Переведіть статус у <i>In Production</i> у розділі <b>OAuth consent screen</b> консолі Google Cloud.</p>
                     </div>
                 </div>
             </div>`
@@ -4689,54 +4713,124 @@ window.handleGmailDrop = async function(file) {
 };
 
 async function loadGmailStatus() {
+    const container = document.getElementById('gmail-status');
+    if (!container) return;
     try {
         const res = await fetch(`${API_BASE}/bank/gmail-status`);
         const status = await res.json();
         
         const credsIcon = status.credentials_exist 
-            ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Завантажено' 
-            : '<i class="fas fa-times-circle" style="color: var(--danger)"></i> Немає';
+            ? '<span style="color: var(--success)"><i class="fas fa-check-circle"></i> Налаштовано</span>' 
+            : '<span style="color: var(--danger)"><i class="fas fa-times-circle"></i> Відсутній</span>';
             
-        const tokenIcon = status.token_exists
-            ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Авторизовано' 
-            : '<i class="fas fa-times-circle" style="color: var(--warning)"></i> Очікує авторизації';
-            
-        let resetBtnHtml = '';
-        if (status.token_exists) {
-            resetBtnHtml = `
-                <div style="margin-top: 0.75rem; text-align: right;">
-                    <button class="btn btn-secondary btn-sm" onclick="resetGmailToken()" style="color: var(--danger); border-color: rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.05);">
-                        <i class="fas fa-sign-out-alt"></i> Скинути токен / Змінити акаунт
+        let tokenIcon = '';
+        let emailHtml = '';
+        let actionButtonsHtml = '';
+
+        if (status.token_valid) {
+            tokenIcon = '<span style="color: var(--success)"><i class="fas fa-check-circle"></i> Підключено</span>';
+            if (status.authorized_email) {
+                emailHtml = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid rgba(255,255,255,0.08)">
+                        <span>Акаунт:</span>
+                        <b style="color: var(--primary-color); word-break: break-all;"><i class="fab fa-google"></i> ${status.authorized_email}</b>
+                    </div>
+                `;
+            }
+            actionButtonsHtml = `
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="startGmailAuth()" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.35rem;" title="Увійти в інший акаунт Google">
+                        <i class="fas fa-sync-alt"></i> Змінити акаунт
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="resetGmailToken()" style="color: var(--danger); border-color: rgba(220, 53, 69, 0.2); background: rgba(220, 53, 69, 0.05); display: flex; align-items: center; justify-content: center; gap: 0.35rem;" title="Відключити поточний акаунт">
+                        <i class="fas fa-sign-out-alt"></i> Відключити
+                    </button>
+                </div>
+            `;
+        } else if (status.token_exists) {
+            tokenIcon = '<span style="color: var(--warning)"><i class="fas fa-exclamation-triangle"></i> Потрібна повторна авторизація</span>';
+            actionButtonsHtml = `
+                <div style="margin-top: 1rem;">
+                    <button id="btn-gmail-auth" class="btn btn-primary" onclick="startGmailAuth()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1rem; font-weight: 600; font-size: 0.95rem;">
+                        <i class="fab fa-google"></i> Авторизувати Gmail
+                    </button>
+                </div>
+            `;
+        } else {
+            tokenIcon = '<span style="color: var(--text-secondary)"><i class="fas fa-times-circle"></i> Не підключено</span>';
+            actionButtonsHtml = `
+                <div style="margin-top: 1rem;">
+                    <button id="btn-gmail-auth" class="btn btn-primary" onclick="startGmailAuth()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1rem; font-weight: 600; font-size: 0.95rem;">
+                        <i class="fab fa-google"></i> Авторизувати Gmail
                     </button>
                 </div>
             `;
         }
 
-        document.getElementById('gmail-status').innerHTML = `
-            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; padding-bottom:0.5rem; border-bottom:1px solid rgba(255,255,255,0.1)">
-                <span>Ключ (credentials.json):</span>
-                <b>${credsIcon}</b>
+        container.innerHTML = `
+            <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 0.85rem; border: 1px solid var(--border-color);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; padding-bottom:0.5rem; border-bottom:1px solid rgba(255,255,255,0.08)">
+                    <span>Ключ Google API:</span>
+                    <b>${credsIcon}</b>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>Стан підключення:</span>
+                    <b>${tokenIcon}</b>
+                </div>
+                ${emailHtml}
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span>Токен (token.json):</span>
-                <b>${tokenIcon}</b>
-            </div>
-            ${resetBtnHtml}
+            ${actionButtonsHtml}
         `;
+
+        const redUriEl = document.getElementById('gmail-redirect-uri-display');
+        if (redUriEl && status.redirect_uri) {
+            redUriEl.textContent = status.redirect_uri;
+        }
     } catch (e) {
-        document.getElementById('gmail-status').innerHTML = '<span class="color-danger">Помилка завантаження статусу</span>';
+        container.innerHTML = '<span class="color-danger">Помилка завантаження статусу</span>';
     }
 }
 
+window.startGmailAuth = async function() {
+    const btn = document.getElementById('btn-gmail-auth') || document.querySelector('button[onclick="startGmailAuth()"]');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Запуск авторизації...';
+        btn.disabled = true;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/bank/gmail-auth-url`);
+        if (!res.ok) {
+            let errorMsg = 'Не вдалося отримати посилання для авторизації';
+            try {
+                const err = await res.json();
+                errorMsg = err.detail || errorMsg;
+            } catch (_) {}
+            throw new Error(errorMsg);
+        }
+        const data = await res.json();
+        if (data.auth_url) {
+            window.location.href = data.auth_url;
+        } else {
+            throw new Error('Сервер не повернув auth_url');
+        }
+    } catch (e) {
+        alert('Помилка авторизації Gmail: ' + e.message);
+        if (btn) {
+            btn.innerHTML = '<i class="fab fa-google"></i> Авторизувати Gmail';
+            btn.disabled = false;
+        }
+    }
+};
+
 window.resetGmailToken = async function() {
-    if (!confirm('Ви впевнені, що хочете скинути поточний Gmail токен? Це дозволить авторизувати інший акаунт.')) return;
+    if (!confirm('Ви впевнені, що хочете відключити поточний акаунт Gmail? Для подальшої синхронізації знадобиться повторна авторизація.')) return;
     try {
         const res = await fetch(`${API_BASE}/bank/gmail-reset`, { method: 'POST' });
         if (!res.ok) {
             const errData = await res.json();
             throw new Error(errData.detail || 'Невідома помилка');
         }
-        alert('Токен успішно скинуто! При наступному запуску синхронізації буде запропоновано увійти у потрібний Google-акаунт.');
+        alert('Акаунт успішно відключено.');
         await loadGmailStatus();
     } catch (err) {
         alert('Помилка при скиданні токена: ' + err.message);

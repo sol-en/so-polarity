@@ -3,9 +3,12 @@
 import os
 import shutil
 import logging
+import json
+import urllib.parse
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
@@ -15,7 +18,12 @@ from ..bank_models import BankPayment, BankBalanceSummary, ImportLog, MappingKey
 from .csv_parser import parse_transactions_csv, parse_saldo_csv, detect_file_type
 from .registry_parser import parse_registry_txt
 from .matching import run_matching_pipeline, _log_change
-from .gmail_fetcher import fetch_registry_emails, GMAIL_API_AVAILABLE
+from .gmail_fetcher import (
+    fetch_registry_emails,
+    get_gmail_service,
+    get_client_config,
+    GMAIL_API_AVAILABLE
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -255,13 +263,22 @@ async def import_registry(
         logger.exception("Registry import error")
         raise HTTPException(500, f"Import error: {e}")
 
+def get_redirect_uri(request: Request) -> str:
+    explicit = os.getenv("GMAIL_REDIRECT_URI")
+    if explicit:
+        return explicit.strip()
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}/api/bank/gmail-callback"
+
+
 @router.post("/sync-gmail")
 def sync_gmail(req: GmailFetchRequest, db: Session = Depends(get_db)):
     if not GMAIL_API_AVAILABLE:
         raise HTTPException(500, "Gmail API libraries not installed.")
     
     try:
-        attachments = fetch_registry_emails(req.from_date, req.to_date)
+        attachments = fetch_registry_emails(req.from_date, req.to_date, db=db)
     except Exception as e:
         logger.exception("Gmail fetch error")
         raise HTTPException(500, f"Gmail sync failed: {str(e)}")
@@ -344,44 +361,226 @@ def sync_gmail(req: GmailFetchRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/gmail-auth-url")
+def get_gmail_auth_url(request: Request, db: Session = Depends(get_db)):
+    """Generate the Google OAuth URL for Gmail integration."""
+    if not GMAIL_API_AVAILABLE:
+        raise HTTPException(500, "Google API libraries not installed.")
+        
+    client_config = get_client_config(db)
+    if not client_config:
+        raise HTTPException(400, "Файл credentials.json не знайдено. Будь ласка, завантажте credentials.json нижче.")
+        
+    redirect_uri = get_redirect_uri(request)
+    
+    try:
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False
+        )
+        auth_url, _ = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        return {"status": "ok", "auth_url": auth_url, "redirect_uri": redirect_uri}
+    except Exception as e:
+        logger.exception("Failed to generate Google auth URL")
+        raise HTTPException(500, f"Помилка формування посилання авторизації: {str(e)}")
+
+
+@router.get("/gmail-callback")
+def gmail_callback(
+    code: Optional[str] = None,
+    error: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """Handle OAuth2 callback from Google, save token to DB, and redirect back to Settings."""
+    if error:
+        logger.warning(f"Google OAuth callback returned error: {error}")
+        err_enc = urllib.parse.quote(f"Google відхилив авторизацію: {error}")
+        return RedirectResponse(url=f"/index.html?gmail_auth_error={err_enc}#settings")
+        
+    if not code:
+        err_enc = urllib.parse.quote("Не отримано код авторизації від Google")
+        return RedirectResponse(url=f"/index.html?gmail_auth_error={err_enc}#settings")
+
+    client_config = get_client_config(db)
+    if not client_config:
+        err_enc = urllib.parse.quote("Файл credentials.json відсутній")
+        return RedirectResponse(url=f"/index.html?gmail_auth_error={err_enc}#settings")
+
+    redirect_uri = get_redirect_uri(request)
+    
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from googleapiclient.discovery import build
+
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            redirect_uri=redirect_uri,
+            autogenerate_code_verifier=False
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        token_json = creds.to_json()
+        
+        # Save token to database SystemSetting
+        token_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_token_json").first()
+        if not token_setting:
+            token_setting = models.SystemSetting(key="gmail_token_json", value=token_json)
+            db.add(token_setting)
+        else:
+            token_setting.value = token_json
+
+        # Fetch profile email
+        email = None
+        try:
+            service = build('gmail', 'v1', credentials=creds)
+            profile = service.users().getProfile(userId='me').execute()
+            email = profile.get('emailAddress')
+            if email:
+                email_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_authorized_email").first()
+                if not email_setting:
+                    email_setting = models.SystemSetting(key="gmail_authorized_email", value=email)
+                    db.add(email_setting)
+                else:
+                    email_setting.value = email
+        except Exception as pe:
+            logger.warning(f"Could not fetch profile email: {pe}")
+            
+        db.commit()
+
+        # Save to disk as well if possible
+        token_path = os.getenv('GMAIL_TOKEN', 'token.json')
+        try:
+            with open(token_path, 'w') as f:
+                f.write(token_json)
+        except Exception:
+            pass
+
+        email_param = f"&email={urllib.parse.quote(email)}" if email else ""
+        return RedirectResponse(url=f"/index.html?gmail_auth=success{email_param}#settings")
+
+    except Exception as e:
+        logger.exception("Failed to exchange Gmail authorization code")
+        err_enc = urllib.parse.quote(f"Помилка обміну токена: {str(e)}")
+        return RedirectResponse(url=f"/index.html?gmail_auth_error={err_enc}#settings")
+
+
 @router.post("/gmail-credentials")
-async def upload_gmail_credentials(file: UploadFile = File(...)):
+async def upload_gmail_credentials(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Upload Google Cloud credentials.json for Gmail API integration."""
     if not file.filename.endswith('.json'):
         raise HTTPException(400, "Expected a .json file")
     
     content = await file.read()
+    try:
+        decoded_text = content.decode('utf-8')
+        data = json.loads(decoded_text)
+        if not ("installed" in data or "web" in data):
+            raise HTTPException(400, "Невірний формат credentials.json (очікується 'installed' або 'web')")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Невірний JSON файл: {e}")
+
+    # Persist to database
+    setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_credentials_json").first()
+    if not setting:
+        setting = models.SystemSetting(key="gmail_credentials_json", value=decoded_text)
+        db.add(setting)
+    else:
+        setting.value = decoded_text
+    db.commit()
+
+    # Save to file
     creds_path = os.getenv('GMAIL_CREDENTIALS', 'credentials.json')
-    
     try:
         with open(creds_path, 'wb') as f:
             f.write(content)
-        return {"status": "ok"}
     except Exception as e:
-        logger.exception("Failed to save credentials")
-        raise HTTPException(500, f"Error saving file: {e}")
+        logger.warning(f"Could not save credentials to file: {e}")
+
+    return {"status": "ok"}
+
 
 @router.get("/gmail-status")
-def get_gmail_status():
-    """Check if credentials.json is present and valid."""
-    creds_path = os.getenv('GMAIL_CREDENTIALS', 'credentials.json')
-    token_path = os.getenv('GMAIL_TOKEN', 'token.json')
+def get_gmail_status(request: Request, db: Session = Depends(get_db)):
+    """Check credentials, token validity, connected account, and return redirect URI."""
+    client_config = get_client_config(db)
+    creds_exist = client_config is not None
+    client_type = None
+    if client_config:
+        client_type = "web" if "web" in client_config else "installed"
+
+    redirect_uri = get_redirect_uri(request)
+    
+    token_exist = False
+    token_valid = False
+    authorized_email = None
+    
+    # Check email setting in DB first
+    email_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_authorized_email").first()
+    if email_setting and email_setting.value:
+        authorized_email = email_setting.value
+        
+    try:
+        service = get_gmail_service(db=db)
+        token_exist = True
+        token_valid = True
+        if not authorized_email:
+            try:
+                prof = service.users().getProfile(userId='me').execute()
+                authorized_email = prof.get('emailAddress')
+                if authorized_email:
+                    setting = models.SystemSetting(key="gmail_authorized_email", value=authorized_email)
+                    db.merge(setting)
+                    db.commit()
+            except Exception:
+                pass
+    except Exception:
+        # Check if token exists at all even if expired
+        token_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_token_json").first()
+        token_path = os.getenv('GMAIL_TOKEN', 'token.json')
+        token_exist = bool((token_setting and token_setting.value) or os.getenv('GMAIL_TOKEN_JSON') or os.path.exists(token_path))
+        token_valid = False
+
     return {
-        "credentials_exist": os.path.exists(creds_path),
-        "token_exists": os.path.exists(token_path)
+        "credentials_exist": creds_exist,
+        "client_type": client_type,
+        "token_exists": token_exist,
+        "token_valid": token_valid,
+        "authorized_email": authorized_email,
+        "redirect_uri": redirect_uri
     }
 
+
 @router.post("/gmail-reset")
-def reset_gmail_token():
-    """Delete token.json to trigger re-authorization on next sync."""
-    token_path = os.getenv('GMAIL_TOKEN', 'token.json')
-    if os.path.exists(token_path):
-        try:
-            os.remove(token_path)
-            return {"status": "ok", "message": "Token reset successfully."}
-        except Exception as e:
-            raise HTTPException(500, f"Failed to delete token file: {e}")
-    return {"status": "ok", "message": "No active token found."}
+def reset_gmail_token(db: Session = Depends(get_db)):
+    """Delete token from DB and disk to disconnect current account."""
+    try:
+        db.query(models.SystemSetting).filter(
+            models.SystemSetting.key.in_(["gmail_token_json", "gmail_authorized_email"])
+        ).delete(synchronize_session=False)
+        db.commit()
+
+        token_path = os.getenv('GMAIL_TOKEN', 'token.json')
+        if os.path.exists(token_path):
+            try:
+                os.remove(token_path)
+            except Exception:
+                pass
+
+        return {"status": "ok", "message": "Токен успішно скинуто."}
+    except Exception as e:
+        logger.exception("Failed to reset Gmail token")
+        raise HTTPException(500, f"Помилка скидання токена: {e}")
 
 
 # ── Payment list & details ───────────────────────────────────────────────────
