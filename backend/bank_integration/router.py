@@ -45,6 +45,10 @@ class DateRangeRequest(BaseModel):
     from_date: Optional[str] = None
     to_date: Optional[str] = None
 
+class GmailClientSecretRequest(BaseModel):
+    client_secret: str
+    client_id: Optional[str] = None
+
 class MappingKeyCreate(BaseModel):
     key_type: str
     key_value: str
@@ -508,6 +512,45 @@ async def upload_gmail_credentials(file: UploadFile = File(...), db: Session = D
         logger.warning(f"Could not save credentials to file: {e}")
 
     return {"status": "ok"}
+
+
+@router.post("/gmail-client-secret")
+def save_gmail_client_secret(req: GmailClientSecretRequest, db: Session = Depends(get_db)):
+    """Save Google OAuth Client Secret directly without needing to construct a JSON file."""
+    secret = req.client_secret.strip()
+    if not secret:
+        raise HTTPException(400, "Ключ Client Secret не може бути порожнім.")
+
+    client_id = (req.client_id or "813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com").strip()
+    
+    config = {
+        "web": {
+            "client_id": client_id,
+            "client_secret": secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    }
+    config_json = json.dumps(config, indent=2)
+
+    # Persist in DB
+    setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_credentials_json").first()
+    if not setting:
+        setting = models.SystemSetting(key="gmail_credentials_json", value=config_json)
+        db.add(setting)
+    else:
+        setting.value = config_json
+    db.commit()
+
+    # Also save to disk
+    creds_path = os.getenv('GMAIL_CREDENTIALS', 'credentials.json')
+    try:
+        with open(creds_path, 'w', encoding='utf-8') as f:
+            f.write(config_json)
+    except Exception as e:
+        logger.warning(f"Could not save credentials.json to disk: {e}")
+
+    return {"status": "ok", "message": "Ключі ZHBK Auth успішно збережено!"}
 
 
 @router.get("/gmail-status")

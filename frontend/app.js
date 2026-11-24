@@ -4494,10 +4494,15 @@ async function renderSettings() {
 
                 <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.75rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Ключ API (credentials.json):</span>
-                        <a href="javascript:void(0)" onclick="document.getElementById('gmail-creds-upload').click()" style="font-size: 0.85rem; color: var(--primary-color); text-decoration: none;">
-                            <i class="fas fa-upload"></i> Оновити файл
-                        </a>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Ключ API:</span>
+                        <div style="display: flex; gap: 0.6rem;">
+                            <a href="javascript:void(0)" onclick="promptGmailClientSecret()" style="font-size: 0.82rem; color: var(--primary-color); text-decoration: none; font-weight: 500;" title="Вставити новий Client Secret від ZHBK Auth">
+                                <i class="fas fa-key"></i> Ввести Secret
+                            </a>
+                            <a href="javascript:void(0)" onclick="document.getElementById('gmail-creds-upload').click()" style="font-size: 0.82rem; color: var(--text-secondary); text-decoration: none;" title="Завантажити JSON файл">
+                                <i class="fas fa-upload"></i> JSON
+                            </a>
+                        </div>
                     </div>
                     <input type="file" id="gmail-creds-upload" accept=".json" style="display:none" onchange="uploadGmailCreds(event)">
 
@@ -4841,6 +4846,29 @@ window.toggleGmailHelp = function() {
     const el = document.getElementById('gmail-help-content');
     if (el) {
         el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
+window.promptGmailClientSecret = async function() {
+    const secret = prompt("Вставте новий Client Secret від клієнта ZHBK Auth (рядок починається на GOCSPX-...):");
+    if (!secret || !secret.trim()) return;
+    try {
+        const res = await fetch(`${API_BASE}/bank/gmail-client-secret`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                client_id: "813851806635-cjiaru3f84uvq2o46qe0gjl63lhg6v9n.apps.googleusercontent.com",
+                client_secret: secret.trim()
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Помилка збереження секретного ключа');
+        }
+        alert('✅ Ключ ZHBK Auth успішно збережено! Тепер натисніть кнопку "Авторизувати Gmail" нижче.');
+        await loadGmailStatus();
+    } catch (e) {
+        alert('Помилка: ' + e.message);
     }
 };
 
