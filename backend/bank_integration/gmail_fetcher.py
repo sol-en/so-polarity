@@ -114,7 +114,7 @@ def fetch_registry_emails(from_date: str, to_date: str) -> List[Tuple[str, bytes
     to_dt_obj = datetime.strptime(to_date, "%Y-%m-%d") + timedelta(days=1)
     to_dt = to_dt_obj.strftime("%Y/%m/%d")
     
-    query = f'subject:(Вивантаження реєстру ПриватБанк 23025161) has:attachment after:{from_dt} before:{to_dt}'
+    query = f'(23025161 OR "Вивантаження" OR reestr) has:attachment after:{from_dt} before:{to_dt}'
     
     logger.info(f"Searching Gmail with query: {query}")
     
