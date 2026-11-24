@@ -1759,8 +1759,14 @@ window.syncGmailRegistries = async function() {
         });
         
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || 'Помилка синхронізації');
+            let errorMsg = 'Помилка синхронізації';
+            try {
+                const err = await res.json();
+                errorMsg = err.detail || errorMsg;
+            } catch (jsonErr) {
+                errorMsg = `Помилка сервера (HTTP ${res.status})`;
+            }
+            throw new Error(errorMsg);
         }
         
         const data = await res.json();
