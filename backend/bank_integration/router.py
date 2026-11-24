@@ -12,6 +12,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 from ..database import get_db
 from .. import models
 from ..bank_models import BankPayment, BankBalanceSummary, ImportLog, MappingKey, MatchStatusLog
@@ -22,7 +24,8 @@ from .gmail_fetcher import (
     fetch_registry_emails,
     get_gmail_service,
     get_client_config,
-    GMAIL_API_AVAILABLE
+    GMAIL_API_AVAILABLE,
+    SCOPES
 )
 
 logger = logging.getLogger(__name__)
@@ -381,7 +384,7 @@ def get_gmail_auth_url(request: Request, db: Session = Depends(get_db)):
         from google_auth_oauthlib.flow import Flow
         flow = Flow.from_client_config(
             client_config,
-            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            scopes=SCOPES,
             redirect_uri=redirect_uri,
             autogenerate_code_verifier=False
         )
@@ -424,9 +427,11 @@ def gmail_callback(
         from google_auth_oauthlib.flow import Flow
         from googleapiclient.discovery import build
 
+        os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
         flow = Flow.from_client_config(
             client_config,
-            scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+            scopes=SCOPES,
             redirect_uri=redirect_uri,
             autogenerate_code_verifier=False
         )

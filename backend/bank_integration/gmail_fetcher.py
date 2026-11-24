@@ -16,9 +16,16 @@ try:
 except ImportError:
     GMAIL_API_AVAILABLE = False
 
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 logger = logging.getLogger(__name__)
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'openid',
+]
 
 
 def get_client_config(db=None):
