@@ -569,6 +569,18 @@ def get_gmail_status(request: Request, db: Session = Depends(get_db)):
 
     redirect_uri = get_redirect_uri(request)
     
+    # Check if explicitly disconnected
+    token_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_token_json").first()
+    if token_setting and (token_setting.value == "disconnected" or not token_setting.value):
+        return {
+            "credentials_exist": creds_exist,
+            "client_type": client_type,
+            "token_exists": False,
+            "token_valid": False,
+            "authorized_email": None,
+            "redirect_uri": redirect_uri
+        }
+
     token_exist = False
     token_valid = False
     authorized_email = None
@@ -593,10 +605,8 @@ def get_gmail_status(request: Request, db: Session = Depends(get_db)):
             except Exception:
                 pass
     except Exception:
-        # Check if token exists at all even if expired
-        token_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_token_json").first()
         token_path = os.getenv('GMAIL_TOKEN', 'token.json')
-        token_exist = bool((token_setting and token_setting.value) or os.getenv('GMAIL_TOKEN_JSON') or os.path.exists(token_path))
+        token_exist = bool((token_setting and token_setting.value and token_setting.value != "disconnected") or os.getenv('GMAIL_TOKEN_JSON') or os.path.exists(token_path))
         token_valid = False
 
     return {
@@ -613,8 +623,15 @@ def get_gmail_status(request: Request, db: Session = Depends(get_db)):
 def reset_gmail_token(db: Session = Depends(get_db)):
     """Delete token from DB and disk to disconnect current account."""
     try:
+        token_setting = db.query(models.SystemSetting).filter(models.SystemSetting.key == "gmail_token_json").first()
+        if not token_setting:
+            token_setting = models.SystemSetting(key="gmail_token_json", value="disconnected")
+            db.add(token_setting)
+        else:
+            token_setting.value = "disconnected"
+
         db.query(models.SystemSetting).filter(
-            models.SystemSetting.key.in_(["gmail_token_json", "gmail_authorized_email"])
+            models.SystemSetting.key == "gmail_authorized_email"
         ).delete(synchronize_session=False)
         db.commit()
 
@@ -625,7 +642,7 @@ def reset_gmail_token(db: Session = Depends(get_db)):
             except Exception:
                 pass
 
-        return {"status": "ok", "message": "Токен успішно скинуто."}
+        return {"status": "ok", "message": "Акаунт успішно відключено."}
     except Exception as e:
         logger.exception("Failed to reset Gmail token")
         raise HTTPException(500, f"Помилка скидання токена: {e}")

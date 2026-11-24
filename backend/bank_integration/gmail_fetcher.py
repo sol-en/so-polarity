@@ -99,19 +99,23 @@ def get_gmail_service(db=None):
             pass
 
     token_json_str = None
+    is_disconnected = False
     if db:
         try:
             from ..models import SystemSetting
             setting = db.query(SystemSetting).filter(SystemSetting.key == "gmail_token_json").first()
-            if setting and setting.value:
-                token_json_str = setting.value
+            if setting:
+                if setting.value == "disconnected" or not setting.value:
+                    is_disconnected = True
+                else:
+                    token_json_str = setting.value
         except Exception as e:
             logger.warning(f"Failed to load token from DB: {e}")
 
-    if not token_json_str:
+    if not token_json_str and not is_disconnected:
         token_json_str = os.getenv('GMAIL_TOKEN_JSON')
 
-    if token_json_str:
+    if token_json_str and not is_disconnected:
         try:
             token_data = json.loads(token_json_str)
             creds = Credentials.from_authorized_user_info(token_data, SCOPES)
@@ -119,7 +123,7 @@ def get_gmail_service(db=None):
             logger.warning(f"Failed to load credentials from token JSON: {e}")
 
     token_path = os.getenv('GMAIL_TOKEN', 'token.json')
-    if not creds and os.path.exists(token_path):
+    if not creds and not is_disconnected and os.path.exists(token_path):
         try:
             creds = Credentials.from_authorized_user_file(token_path, SCOPES)
             if creds and db:
