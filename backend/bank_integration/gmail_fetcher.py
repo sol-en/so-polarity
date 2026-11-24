@@ -39,20 +39,19 @@ def get_gmail_service():
     if not creds and os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     
+    refresh_error = None
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
             except Exception as e:
-                logger.warning(f"Failed to refresh Gmail token: {e}. Removing invalid token and re-authenticating...")
-                if os.path.exists(token_path):
-                    try:
-                        os.remove(token_path)
-                    except Exception as rm_err:
-                        logger.warning(f"Could not remove invalid token file: {rm_err}")
+                logger.warning(f"Failed to refresh Gmail token: {e}. Token needs re-authentication.")
+                refresh_error = e
                 creds = None
 
         if not creds:
+            if refresh_error:
+                raise RuntimeError(f"Термін дії токена Google закінчився ({refresh_error}). Потрібно оновити GMAIL_TOKEN_JSON через скрипт scripts/refresh_gmail_token.py.")
             if not os.path.exists(creds_path):
                 raise FileNotFoundError("Для синхронізації з Gmail на хмарному сервері додайте змінну оточення GMAIL_TOKEN_JSON в налаштуваннях Render.")
             try:
