@@ -78,13 +78,18 @@ def calculate_charges_for_period(period: str, db: Session):
     db.commit()
 
 
+from ..auth_utils import get_current_user, get_current_admin, CurrentUser
+
 @router.post("/calculate")
-def calculate_charges(req: schemas.CalculationRequest, db: Session = Depends(get_db)):
+def calculate_charges(
+    req: schemas.CalculationRequest, 
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(get_current_admin)
+):
     calculate_charges_for_period(req.period, db)
     apartments = db.query(models.Apartment).all()
     return {"message": f"Charges calculated for {len(apartments)} apartments for period {req.period}"}
 
-from ..auth_utils import get_current_user, CurrentUser
 
 @router.post("/report", response_model=List[schemas.ApartmentReport])
 def get_charges_report(

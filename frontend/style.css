@@ -1614,4 +1614,11 @@ body.light-theme .contact-editor-row {
     border: 1px solid #e2e8f0 !important;
 }
 
-
+/* Resident Role Guards */
+body.role-resident .sidebar-nav li[data-page="transactions"],
+body.role-resident .sidebar-nav li[data-page="receipts"],
+body.role-resident .sidebar-nav li[data-page="settings"],
+body.role-resident .sidebar-nav li[data-page="apartments"],
+body.role-resident #btn-recalculate {
+    display: none !important;
+}

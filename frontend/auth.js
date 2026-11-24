@@ -1,6 +1,16 @@
-// Authentication and Authorization logic
-
 let currentUser = null;
+
+// Global helper for role-based page permission
+window.isPageAllowedForUser = function(page, user) {
+    if (!page) return false;
+    const cleanPage = page.replace('#', '').split('?')[0].trim();
+    const role = (user && user.role) || (window.currentUser && window.currentUser.role) || (currentUser && currentUser.role) || localStorage.getItem('zhbk_role');
+    if (role === 'resident') {
+        const allowedPages = ['charges', 'reports', 'forecast', 'dashboard', 'help'];
+        return allowedPages.includes(cleanPage);
+    }
+    return true;
+};
 
 // This function is called by Google Sign-In when the user successfully authenticates
 async function handleGoogleLogin(response) {
@@ -30,6 +40,7 @@ async function handleGoogleLogin(response) {
         localStorage.setItem('zhbk_email', data.email);
         
         currentUser = data;
+        window.currentUser = currentUser;
         
         // Setup UI for the current user
         applyRoleRestrictions();
@@ -40,7 +51,11 @@ async function handleGoogleLogin(response) {
         
         // Re-initialize or fetch initial data since app might have failed initial fetches without token
         if (typeof window.loadPage === 'function') {
-            window.loadPage(currentUser.role === 'resident' ? 'charges' : 'reports');
+            const currentHash = window.location.hash ? window.location.hash.replace('#', '').split('?')[0].trim() : '';
+            const targetPage = (currentHash && window.isPageAllowedForUser(currentHash, currentUser))
+                ? currentHash
+                : (currentUser.role === 'resident' ? 'charges' : 'reports');
+            window.loadPage(targetPage);
         } else if (typeof window.loadDashboardData === 'function') {
             window.loadDashboardData();
         }
@@ -65,6 +80,7 @@ function checkExistingLogin() {
             email: email,
             apartment_id: apartment_id ? parseInt(apartment_id) : null
         };
+        window.currentUser = currentUser;
         
         applyRoleRestrictions();
         document.getElementById('login-overlay').style.display = 'none';
@@ -120,6 +136,7 @@ function applyRoleRestrictions() {
     const isEn = (window.currentLang === 'en');
 
     if (currentUser.role === 'admin') {
+        document.body.classList.remove('role-resident');
         if (resInfo) resInfo.style.display = 'none';
         if (userInfo) {
             userInfo.style.display = 'flex';
@@ -139,12 +156,27 @@ function applyRoleRestrictions() {
             `;
         }
     } else if (currentUser.role === 'resident') {
-        // Hide specific menu items for residents (transactions, receipts, settings)
-        const hidePages = ['transactions', 'receipts', 'settings'];
+        document.body.classList.add('role-resident');
+        // Hide specific menu items for residents (transactions, receipts, settings, apartments)
+        const hidePages = ['transactions', 'receipts', 'settings', 'apartments'];
         hidePages.forEach(page => {
             const el = document.querySelector(`.sidebar-nav li[data-page="${page}"]`);
             if (el) el.style.display = 'none';
         });
+
+        // Hide recalculate button for residents
+        const recalcBtn = document.getElementById('btn-recalculate');
+        if (recalcBtn) recalcBtn.style.display = 'none';
+
+        // If currently on a forbidden hash or page, redirect to charges
+        const currentHash = window.location.hash ? window.location.hash.replace('#', '').split('?')[0].trim() : '';
+        const currentPage = (window.state && window.state.currentPage) || currentHash;
+        if (!window.isPageAllowedForUser(currentPage, currentUser) || (currentHash && !window.isPageAllowedForUser(currentHash, currentUser))) {
+            window.history.replaceState(null, '', '#charges');
+            if (typeof window.loadPage === 'function') {
+                window.loadPage('charges');
+            }
+        }
 
         // Ensure charges is the first item in sidebar for residents
         const navUl = document.querySelector('.sidebar-nav ul');
@@ -170,11 +202,13 @@ function applyRoleRestrictions() {
 }
 
 function logout() {
+    document.body.classList.remove('role-resident');
     localStorage.removeItem('zhbk_token');
     localStorage.removeItem('zhbk_role');
     localStorage.removeItem('zhbk_apartment_id');
     localStorage.removeItem('zhbk_email');
     currentUser = null;
+    window.currentUser = null;
     window.location.reload();
 }
 

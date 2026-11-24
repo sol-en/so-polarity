@@ -102,25 +102,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initNavigation();
     
+    // Global helper for role-based page permission
+    window.isPageAllowedForUser = function(page, user) {
+        if (!page) return false;
+        const cleanPage = page.replace('#', '').split('?')[0].trim();
+        const role = (user && user.role) || (window.currentUser && window.currentUser.role) || (currentUser && currentUser.role) || localStorage.getItem('zhbk_role');
+        if (role === 'resident') {
+            const allowedPages = ['charges', 'reports', 'forecast', 'dashboard', 'help'];
+            return allowedPages.includes(cleanPage);
+        }
+        return true;
+    };
+
     // Check for Gmail OAuth return params
     const urlParams = new URLSearchParams(window.location.search);
-    let initialPage = (currentUser && currentUser.role === 'resident') ? 'charges' : 'reports';
+    const activeRole = (window.currentUser && window.currentUser.role) || (currentUser && currentUser.role) || localStorage.getItem('zhbk_role');
+    const isResident = activeRole === 'resident';
+
+    let hashPage = window.location.hash ? window.location.hash.replace('#', '').split('?')[0].trim() : null;
+    let initialPage = isResident ? 'charges' : 'reports';
+
+    if (hashPage && window.isPageAllowedForUser(hashPage, window.currentUser || currentUser)) {
+        initialPage = hashPage;
+    } else if (window.location.hash) {
+        window.history.replaceState(null, '', `#${initialPage}`);
+    }
+
     if (urlParams.get('gmail_auth') === 'success') {
         const email = urlParams.get('email');
         setTimeout(() => {
             alert(email ? `✅ Gmail успішно авторизовано!\nПідключено акаунт: ${email}` : '✅ Gmail успішно авторизовано!');
         }, 400);
-        initialPage = 'settings';
+        if (!isResident) {
+            initialPage = 'settings';
+        }
         window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
     } else if (urlParams.get('gmail_auth_error')) {
         const err = decodeURIComponent(urlParams.get('gmail_auth_error'));
         setTimeout(() => {
             alert('⚠️ Помилка авторизації Gmail:\n' + err);
         }, 400);
-        initialPage = 'settings';
+        if (!isResident) {
+            initialPage = 'settings';
+        }
         window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
-    } else if (window.location.hash === '#settings') {
-        initialPage = 'settings';
     }
 
     loadPage(initialPage);
@@ -353,6 +378,10 @@ function initNavigation() {
         item.addEventListener('click', e => {
             e.preventDefault();
             const page = item.getAttribute('data-page');
+            const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+            if (!window.isPageAllowedForUser(page, activeUser)) {
+                return;
+            }
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
             loadPage(page);
@@ -360,7 +389,37 @@ function initNavigation() {
     });
 }
 
+// Global hash change listener for direct link navigation
+window.addEventListener('hashchange', () => {
+    const hash = window.location.hash ? window.location.hash.replace('#', '').split('?')[0].trim() : '';
+    if (!hash) return;
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser(hash, activeUser)) {
+        console.warn(`[Access Guard] Hash #${hash} forbidden for role '${activeUser?.role}'. Redirecting.`);
+        const fallback = (activeUser && activeUser.role === 'resident') ? 'charges' : 'reports';
+        window.history.replaceState(null, '', `#${fallback}`);
+        if (state.currentPage !== fallback) {
+            loadPage(fallback);
+        }
+        return;
+    }
+    if (state.currentPage !== hash) {
+        loadPage(hash);
+    }
+});
+
 async function loadPage(page) {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser(page, activeUser)) {
+        console.warn(`[Access Guard] Page '${page}' is forbidden for role '${activeUser?.role}'. Redirecting to charges.`);
+        page = (activeUser && activeUser.role === 'resident') ? 'charges' : 'reports';
+        window.history.replaceState(null, '', `#${page}`);
+    } else {
+        if (window.location.hash !== `#${page}`) {
+            window.history.replaceState(null, '', `#${page}`);
+        }
+    }
+
     if (Object.keys(state.pendingChanges).length > 0 && state.currentPage === 'apartments') {
         const proceed = await showConfirmModal(
             'Unsaved Changes',
@@ -551,6 +610,9 @@ function showConfirmModal(title, message) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 window.goToTransactionsFilter = function(type, group, purpose, month) {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser('transactions', activeUser)) return;
+
     if (month) {
         const [year, mo] = month.split('-');
         const lastDay = new Date(parseInt(year), parseInt(mo), 0).getDate();
@@ -1248,6 +1310,13 @@ function normalizeSearchString(str) {
 
 // Transactions
 async function renderTransactions() {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser('transactions', activeUser)) {
+        console.warn("[Access Guard] renderTransactions blocked for unauthorized role.");
+        window.history.replaceState(null, '', '#charges');
+        loadPage('charges');
+        return;
+    }
     try {
         pageTitle.innerText = 'Транзакції';
 
@@ -3256,6 +3325,11 @@ async function printChargesReport() {
 window.exportChargesPDF = printChargesReport;
 
 async function recalculateAll() {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (activeUser && activeUser.role === 'resident') {
+        console.warn("[Access Guard] recalculateAll blocked for resident.");
+        return;
+    }
     const btn = document.getElementById('btn-recalculate');
     const statusEl = document.getElementById('recalc-status');
     if (btn) {
@@ -4048,6 +4122,13 @@ window.processMockGooglePay = function() {
 
 // Receipts (formerly Reports/Print)
 async function renderReceipts() {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser('receipts', activeUser)) {
+        console.warn("[Access Guard] renderReceipts blocked for unauthorized role.");
+        window.history.replaceState(null, '', '#charges');
+        loadPage('charges');
+        return;
+    }
     pageTitle.innerText = window.t ? window.t('Receipts') : 'Квитанції';
     if (state.apartments.length === 0) await fetchApartments();
 
@@ -4411,6 +4492,13 @@ function _renderDebtorsTable(previewArea, printBtn, endFormatted) {
 
 // Settings
 async function renderSettings() {
+    const activeUser = window.currentUser || (localStorage.getItem('zhbk_token') ? { role: localStorage.getItem('zhbk_role') } : null);
+    if (!window.isPageAllowedForUser('settings', activeUser)) {
+        console.warn("[Access Guard] renderSettings blocked for unauthorized role.");
+        window.history.replaceState(null, '', '#charges');
+        loadPage('charges');
+        return;
+    }
     pageTitle.innerText = 'Налаштування';
     
     if (state.apartments.length === 0) await fetchApartments();
