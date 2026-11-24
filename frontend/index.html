@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ЖБК № 102 «Заполяр'є»</title>
-    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="style.css?v=17">
     <link rel="stylesheet" href="print.css?v=4" media="print">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -80,12 +80,12 @@
                     <button class="btn btn-primary" id="btn-recalculate">
                         <i class="fas fa-sync"></i> <span>Перерахувати</span>
                     </button>
-                    <div class="period-selector-wrapper" style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                        <span style="font-size: 0.75rem; color: var(--accent-color); font-weight: 600; display: flex; align-items: center; gap: 5px; user-select: none;">
+                    <div class="period-selector-wrapper">
+                        <span class="period-selector-label" onclick="document.getElementById('custom-period-btn').click()">
                             <i class="far fa-calendar-alt"></i> <span id="period-selector-label-text">Період звітності (натисніть щоб змінити):</span>
                         </span>
                         <div class="period-selector-container custom-dropdown-container" style="position: relative;">
-                            <button id="custom-period-btn" class="btn btn-secondary" style="width: 275px; text-align: left; background: var(--card-bg); color: var(--text-primary); border: 1.5px solid var(--accent-color); padding: 0.5rem 1rem; border-radius: 6px; outline: none; display: flex; justify-content: space-between; align-items: center;" title="Натисніть для вибору періоду звітності (місяць, квартал, рік або довільні дати)">
+                            <button id="custom-period-btn" class="btn btn-secondary" title="Натисніть для вибору періоду звітності (місяць, квартал, рік або довільні дати)">
                                 <span><i class="far fa-calendar-alt" style="color: var(--accent-color); margin-right: 4px;"></i> <span id="custom-period-text">Оберіть період...</span></span>
                                 <i class="fas fa-caret-down" style="color: var(--accent-color);"></i>
                             </button>

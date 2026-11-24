@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 """
 Скрипт перенесення всіх даних із SQLite (zhbk_app.db) у PostgreSQL (Render/Neon).
-Використання:
-    python3 scripts/migrate_to_postgres.py --target "postgresql://user:pass@host:5432/dbname"
-або задати змінну оточення TARGET_DATABASE_URL:
-    export TARGET_DATABASE_URL="postgresql://..."
-    python3 scripts/migrate_to_postgres.py
 """
 
 import os
@@ -13,7 +8,6 @@ import sys
 import argparse
 from sqlalchemy import create_engine, select, text
 
-# Додаємо кореневу папку в sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.database import Base
@@ -36,15 +30,19 @@ def migrate(sqlite_path: str, target_db_url: str):
     Base.metadata.create_all(bind=dst_engine)
 
     total_migrated = 0
+    is_postgres = "postgres" in target_db_url.lower()
+
+    with dst_engine.connect() as dst_conn:
+        print("\n🧹 Очищення старих даних у зворотньому порядку залежностей...")
+        for table in reversed(Base.metadata.sorted_tables):
+            try:
+                dst_conn.execute(table.delete())
+                dst_conn.commit()
+            except Exception as e:
+                dst_conn.rollback()
 
     with src_engine.connect() as src_conn, dst_engine.connect() as dst_conn:
-        is_postgres = "postgres" in target_db_url.lower()
-        if is_postgres:
-            try:
-                dst_conn.execute(text("SET session_replication_role = 'replica';"))
-            except Exception as e:
-                print(f"Попередження щодо session_replication_role: {e}")
-
+        print("\n📥 Копіювання таблиць у порядку зв'язків...")
         for table in Base.metadata.sorted_tables:
             table_name = table.name
             try:
@@ -52,10 +50,6 @@ def migrate(sqlite_path: str, target_db_url: str):
                 if not rows:
                     continue
 
-                # Очистити таблицю призначення перед записом
-                dst_conn.execute(table.delete())
-
-                # Вставити пакетами
                 data_to_insert = [dict(r) for r in rows]
                 dst_conn.execute(table.insert(), data_to_insert)
                 dst_conn.commit()
@@ -63,7 +57,7 @@ def migrate(sqlite_path: str, target_db_url: str):
                 print(f"  ✅ {table_name}: скопійовано {len(data_to_insert)} рядків")
                 total_migrated += len(data_to_insert)
 
-                # Оновити автоінкремент (SEQUENCE) у Postgres
+                # Оновлюємо послідовність автоінкременту (id sequence)
                 if is_postgres:
                     try:
                         dst_conn.execute(text(f"""
@@ -76,14 +70,8 @@ def migrate(sqlite_path: str, target_db_url: str):
                     except Exception:
                         pass
             except Exception as e:
+                dst_conn.rollback()
                 print(f"  ❌ Помилка при копіюванні таблиці {table_name}: {e}")
-
-        if is_postgres:
-            try:
-                dst_conn.execute(text("SET session_replication_role = 'origin';"))
-                dst_conn.commit()
-            except Exception:
-                pass
 
     print(f"\n🎉 Міграцію завершено! Загалом перенесено {total_migrated} записів.")
 
@@ -98,8 +86,6 @@ if __name__ == "__main__":
 
     if not args.target:
         print("❌ Помилка: Не вказано цільову базу даних.")
-        print("Вкажіть через аргумент: --target \"postgresql://user:pass@host:5432/dbname\"")
-        print("Або експортуйте змінну оточення TARGET_DATABASE_URL.")
         sys.exit(1)
 
     migrate(args.source, args.target)

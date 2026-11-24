@@ -242,6 +242,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-top: 8px;
     margin-bottom: 1.5rem;
 }
 
@@ -257,6 +258,44 @@ body {
     font-weight: 600;
     padding: 0 12px;
     border-radius: 8px;
+}
+
+.period-selector-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.period-selector-label {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    right: 0;
+    font-size: 0.75rem;
+    color: var(--accent-color);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    user-select: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#custom-period-btn {
+    width: 275px;
+    height: 36px;
+    text-align: left;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border: 1.5px solid var(--accent-color);
+    padding: 0 12px;
+    border-radius: 8px;
+    outline: none;
+    display: inline-flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8125rem;
+    font-weight: 600;
 }
 
 .current-period-display {
